@@ -1,0 +1,473 @@
+---
+title: "DHW"
+author: "Shannon Eckhardt"
+date: '2022-07-12'
+output: html_document
+---
+
+```{r, echo = FALSE}
+Sys.setenv(LANG = "en")
+rm(list=ls()) # clear environment
+# load all libraries
+library(lubridate)
+library(ncdf4)
+library(terra)
+library(sf)
+library(raster)
+library(tidyverse)
+library(readxl)
+library(here)
+```
+
+#Load the DHW data
+There is a DHW file for each day from 1992-2021 that has to be downloaded from the NOAA Coral Watch Website *(see other script for extraction of the files)*. The files can be found [here](https://www.star.nesdis.noaa.gov/pub/sod/mecb/crw/data/5km/v3.1_op/nc/v1.0/monthly/).
+
+```{r}
+# create a list of the DHW files and extract them from a folder
+ncfiles <-  list.files(
+  "/Users/Shannon/OneDrive/A - UNSW/T2 2022/BEES9041/BigData_Coral_DHW/Data/DHW/data", 
+  pattern    = ".nc$", # load all the files with .nc at the end of the file
+  full.names = TRUE)
+
+# get the files for the summer months only -> 12 = December, 01 = January, 02 = February
+# \d matches any digits
+target_files <-  grep(ncfiles, pattern=r"((12|01|02)\d\d.nc$)", value=TRUE)
+
+# extract only year-month-day from the filenames -> extract the numbers standing in front of .nc at the end of the filename
+ymd <-  gsub(x = target_files, pattern=".+(\\d{8}).nc$", replacement =  "\\1")
+# turn ymd into actual date format
+dates <-  lubridate::ymd(ymd)
+
+#  adjust to the extent you are after,
+#  be sure it aligns with the cellsize and boundaries of the netcdf data
+# CRS = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs+ towgs84=0,0,0"
+# crs copied from one of the netcdf files
+CRS = "+proj=longlat +a=6378137 +rf=298.2572 +no_defs"
+
+# define the area of and around the GBR and convert to an sf object
+GBR_extent <-  st_as_sf(
+  # convert to an sfc object
+  st_as_sfc(
+    st_bbox(c(xmin = 140, ymin = -9, xmax = 155, ymax = -29)),
+    crs=CRS))
+
+# create a raster where the GBR area acts as a base
+GBR_base_ras <-  rast(
+  GBR_extent, 
+  resolution = 0.05,
+  crs=CRS,
+  vals=0)
+
+means_list <-  list()
+four_dhw_list <- list()
+target_years <-  1992:2021
+for (year in target_years) {
+  sum_ras = 0 * GBR_base_ras
+  four_dhw = sum_ras
+  # find files where dates are in the southern hemisphere summer starting in the target year
+  # start from Dec in target year -> start Dec 1992
+  start_date <-  ymd(paste0(year, "1201"))
+  # end in target year+1 in Feb -> end Feb 1993 to get summer 1992/1993 ->  takes 28-29 days in Feb into account
+  end_date   <-  ymd(paste0(year+1, "0301"))  
+  #  dates in season = dates for 1 summer season (Dec-Feb)
+  dates_in_season <-  dates >= start_date & dates < end_date # from Dec 1 till Feb 29
+  files_in_season <-  target_files[dates_in_season]
+  #message (head (files_in_season))
+
+  for (file in files_in_season) {
+    # terra uses gdal underneath to read the file
+    # and is much faster than fiddling with ncdf4 and raster libs
+    # formatted = sprintf("NETCDF:%s", file)
+    # r = rast(formatted)["degree_heating_week"]
+    
+    #  get the component we care about as a terra::rast object 
+    r = rast(file)["degree_heating_week"] # degree heating week is a variable in every file containing values
+    clipped <- raster::crop(r, GBR_base_ras) # subset of r where just the data from the GBR is used, not the world
+    sum_ras <- sum_ras + clipped
+    # message (file)
+    # message (paste (summary (r)))
+    
+    # take out individual days which have a DHW above 4°C
+    thresh <- clipped >= 4
+    four_dhw <- four_dhw + thresh
+    
+    gc() # garbage collection
+  }
+  mean_ras <-  sum_ras / length(files_in_season) # mean DHW for every year = every summer season
+  #  now do something with mean_ras, e.g. save it to your hard drive
+  #  to process in another script
+  # plot(mean_ras) # plots 30 years (summers) from 1992 - 2021
+  # mean DHW per summer per location (1 value per location per year):
+  means_list[[as.character(year)]] <- mean_ras
+  four_dhw_list[[as.character(year)]] <- four_dhw
+}
+```
+
+```{r, echo = FALSE}
+#  this has all the data and can be drilled into to extract the time series for each location
+stack_means <- rast(means_list) # raster stack
+stack_four_dhw <- rast(four_dhw_list)
+plot(stack_means$`2021`)
+# readValues(stack_means$"1993") # one year/summer has more than one value because there's multiple locations!
+summary(stack_means, maxsamp = ncell(stack_means))
+```
+
+Mean DHW for each summer (1 value per location per year)
+```{r}
+# Convert raster to SpatialPointsDataFrame
+mean_dhw_df <- as.data.frame(stack_means, xy = TRUE)
+
+# mean DHW
+ggplot(mean_dhw_df, aes(x, y)) +
+  geom_raster(aes(fill = `2021`)) +
+  geom_point(data = corals, aes(x = lon, y = lat), color = "grey", size = 0.3) +
+  scale_fill_viridis_c(option = "magma") +
+  coord_quickmap() +
+  labs(fill = "Mean DHWs") +
+  ggtitle("2021") +
+  theme_classic()
+
+# over4dhw had values of how many days in that summer were over 4 DHW
+over4dhw_df <- as.data.frame(stack_four_dhw, xy = TRUE)
+ggplot(over4dhw_df, aes(x, y)) +
+  geom_raster(aes(fill = `2021`)) +
+  geom_point(data = corals, aes(x = lon, y = lat), color = "grey", size = 0.3) +
+  scale_fill_viridis_c(option = "magma") +
+  coord_quickmap() +
+  labs(fill = "Consecutive days with >= 4-DHWs") +
+  ggtitle("2021") +
+  theme_classic()
+
+```
+
+DHW over 4°C
+```{r}
+# how many days with over 4°C heating weeks
+over4dhw <- as.data.frame(stack_four_dhw)
+coords <- crds(stack_four_dhw)
+over4dhw$lon <- coords[,1, drop = FALSE] # add lon from stack to df
+over4dhw$lat <- coords[,2, drop = FALSE] # add lat from stack to df
+```
+
+# Load the coral cover data
+The coral cover data comes from the Australian Institute for Marine Science (AIMS) Long-term Monitoring Program (LTMP) in the GBR and can be found here: (AIMS LTMP)[https://apps.aims.gov.au/metadata/view/a17249ab-5316-4396-bb27-29f2d568f727]. They have been recording coral cover and other changes in reef communities since 1983, however, the coral cover data starts in 1992.
+
+```{r}
+# load metadata for manta tow (coral reefs)
+corals <- read_excel("/Users/Shannon/OneDrive/A - UNSW/T2 2022/BEES9041/BigData_Coral_DHW/Data/metadata_manta_tow.xlsx")
+
+# new column -> coral cover per unit effort (CPUE)
+# new column -> dead coral cover per unit effort (DPUE)
+# log transform because both variables skewed and +1 because of zeros
+corals <- mutate(corals, log_cpue = log10((mean_live_coral / tows)+1))
+corals <- mutate(corals, log_dpue = log10((mean_dead_coral / tows)+1))
+```
+
+# Summarize data into Northern, Central, and Southern GBR
+## Sectors
+### North
+CG – Cape Grenville
+CL – Cooktown-Lizard Island
+PC – Princess Charlotte Bay
+TS – Torres Strait
+
+### Central
+CA – Cairns
+CU – Cape Upstart
+IN - Innisfail
+TO – Townsville
+WH - Whitsundays
+
+### South
+CB – Capricorn-Bunker
+PO - Pompey
+SW – Swain
+
+```{r}
+unique(corals$sector)
+n_distinct(corals$sector)
+count(corals, sector)
+
+# NORTH ------------------------------------------
+cg <- filter(corals, sector == "CG")
+cl <- filter(corals, sector == "CL")
+pc <- filter(corals, sector == "PC")
+ts <- filter(corals, sector == "TS")
+northGBR <- rbind(cg, cl, pc, ts)
+
+# use floor_date from lubridate package to round down to the year of the sample date
+# not using variable report_year because that is the year the report was issued not the year it was sampled
+mean_northGBR <- northGBR %>%
+    group_by(sample_year = floor_date(sample_date, "year")) %>%
+    summarize(mean_north = mean(log_cpue))
+
+meandead_northGBR <- northGBR %>%
+    group_by(sample_year = floor_date(sample_date, "year")) %>%
+    summarize(meandead_north = mean(log_dpue))
+
+ggplot(mean_northGBR, aes(x = sample_year, y = mean_north)) +
+  geom_point() +
+  geom_line() +
+  ggtitle("Northern GBR") +
+  ylab("Log(Mean North)") +
+  theme_classic()
+
+# CENTRAL ------------------------------------------
+ca <- filter(corals, sector == "CA")
+cu <- filter(corals, sector == "CU")
+in_ <- filter(corals, sector == "IN")
+to <- filter(corals, sector == "TO")
+wh <- filter(corals, sector == "WH")
+centralGBR <- rbind(ca, cu, in_, to, wh)
+
+mean_centralGBR <- centralGBR %>%
+    group_by(sample_year = floor_date(sample_date, "year")) %>%
+    summarize(mean_central = mean(log_cpue))
+
+meandead_centralGBR <- centralGBR %>%
+    group_by(sample_year = floor_date(sample_date, "year")) %>%
+    summarize(meandead_central = mean(log_dpue))
+
+ggplot(mean_centralGBR, aes(x = sample_year, y = mean_central)) +
+  geom_point() +
+  geom_line() +
+  ggtitle("Central GBR") +
+   ylab("Log(Mean Central)") +
+  theme_classic()
+
+# SOUTH ------------------------------------------
+cb <- filter(corals, sector == "CB")
+po <- filter(corals, sector == "PO")
+sw <- filter(corals, sector == "SW")
+southGBR <- rbind(cb, po, sw)
+
+mean_southGBR <- southGBR %>%
+    group_by(sample_year = floor_date(sample_date, "year")) %>%
+    summarize(mean_south = mean(log_cpue))
+
+meandead_southGBR <- southGBR %>%
+    group_by(sample_year = floor_date(sample_date, "year")) %>%
+    summarize(meandead_south = mean(log_dpue))
+
+ggplot(mean_southGBR, aes(x = sample_year, y = mean_south)) +
+  geom_point() +
+  geom_line() +
+  ggtitle("Southern GBR") +
+  ylab("Log(Mean South)") +
+  theme_classic()
+
+# mean coral cover
+ggplot() +
+  geom_point(data = mean_northGBR, aes(x = sample_year, y = mean_north), color = "red") +
+  geom_line(data = mean_northGBR, aes(x = sample_year, y = mean_north), color = "red") +
+  geom_point(data = mean_centralGBR, aes(x = sample_year, y = mean_central), color = "green") +
+  geom_line(data = mean_centralGBR, aes(x = sample_year, y = mean_central), color = "green") +
+  geom_point(data = mean_southGBR, aes(x = sample_year, y = mean_south), color = "blue") +
+  geom_line(data = mean_southGBR, aes(x = sample_year, y = mean_south), color = "blue") +
+  theme_classic() +
+  ylab("Log(Mean Cover per Unit Effort)")
+
+# mean dead coral cover
+ggplot() +
+  geom_point(data = meandead_northGBR, aes(x = sample_year, y = meandead_north), color = "red") +
+  geom_line(data = meandead_northGBR, aes(x = sample_year, y = meandead_north), color = "red") +
+  geom_point(data = meandead_centralGBR, aes(x = sample_year, y = meandead_central), color = "green") +
+  geom_line(data = meandead_centralGBR, aes(x = sample_year, y = meandead_central), color = "green") +
+  geom_point(data = meandead_southGBR, aes(x = sample_year, y = meandead_south), color = "blue") +
+  geom_line(data = meandead_southGBR, aes(x = sample_year, y = meandead_south), color = "blue") +
+  theme_classic() +
+  ylab("Log(Mean Dead Cover per Unit Effort)")
+# dead cover might not equal bleached cover because bleached ≠ dead
+```
+
+## Mean cover of the individual 12 sectors
+This is a more accurate representation of coral cover, as the cover for many sectors was averaged above (into North, Central, and South GBR) and some resolution was lost.
+```{r}
+# Cape Grenville
+mean_cg <- cg %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# Cooktown-Lizard Island
+mean_cl <-  cl %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# Princess Charlotte Bay
+mean_pc <-  pc %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# Torres Strait -> only one observation in 2021
+mean_ts <-  ts %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# Cairns
+mean_ca <-  ca %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# Cape Upstart
+mean_cu <-  cu %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# Innisfail
+mean_in <-  in_ %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# Townsville
+mean_to <-  to %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# Whitsundays
+mean_wh <-  wh %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# Capricorn-Bunker
+mean_cb <-  cb %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# Pompey
+mean_po <-  po %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# Swain
+mean_sw <-  sw %>%
+  group_by(sample_year = floor_date(sample_date, "year")) %>%
+  summarize(mean_cover = mean(log_cpue))
+
+# plot all of them
+# there are df where there's not continuous values from 1992-2021 because there were no manta tows for some years
+
+# North sectors
+setNames(list(mean_cg, mean_cl, mean_pc, mean_ts), c("mean_cg", "mean_cl", "mean_pc", "mean_ts")) %>%
+  map_df(~ .x %>% gather(key, value, -sample_year), .id="source") %>% 
+  ggplot(aes(x = sample_year, y = value, colour=source)) +
+  geom_line() +
+  geom_point(size = 0.75, alpha = 0.5) +
+  xlab("Sample Year") +
+  ylab("log(Mean Cover per Unit Effort)") +
+  scale_color_brewer("Sectors", labels = c("Cape Grenville", "Cooktown-Lizard Island", "Princess Charlotte Bay", "Torres Strait"), palette = "Set2") +
+  ggtitle("North Sectors") +
+  theme_classic()
+
+ggsave(filename = here("Plots/north_sectors_mean_cover.pdf"), plot = last_plot(), height = 15, width = 25, units = "cm", scale = 0.7)
+
+# Central sectors
+setNames(list(mean_ca, mean_cu, mean_in, mean_to, mean_wh), c("mean_ca", "mean_cu", "mean_in", "mean_to", "mean_wh")) %>%
+  map_df(~ .x %>% gather(key, value, -sample_year), .id="source") %>% 
+  ggplot(aes(x = sample_year, y = value, colour=source)) +
+  geom_line() +
+  geom_point(size = 0.75, alpha = 0.5) +
+  xlab("Sample Year") +
+  ylab("log(Mean Cover per Unit Effort)") +
+  scale_color_brewer("Sectors", labels = c("Cairns", "Cape Upstart", "Innisfail", "Townsville", "Whitsundays"), palette = "Set2") +
+  ggtitle("Central Sectors") +
+  theme_classic()
+
+ggsave(filename = here("Plots/central_sectors_mean_cover.pdf"), plot = last_plot(), height = 15, width = 25, units = "cm", scale = 0.7)
+
+# South sectors
+setNames(list(mean_cb, mean_po, mean_sw), c("mean_cb", "mean_po", "mean_sw")) %>%
+  map_df(~ .x %>% gather(key, value, -sample_year), .id="source") %>% 
+  ggplot(aes(x = sample_year, y = value, colour=source)) +
+  geom_line() +
+  geom_point(size = 0.75, alpha = 0.5) +
+  xlab("Sample Year") +
+  ylab("log(Mean Cover per Unit Effort)") +
+  scale_color_brewer("Sectors", labels = c("Capricorn-Bunker", "Pompey", "Swain"), palette = "Set2") +
+  ggtitle("South Sectors") +
+  theme_classic()
+
+ggsave(filename = here("Plots/south_sectors_mean_cover.pdf"), plot = last_plot(), height = 15, width = 25, units = "cm", scale = 0.7)
+
+```
+
+
+
+```{r}
+# fulljoin in dplyr to bind dhw dates and coral dates
+# then filter out the NAs because coral cover does not occur every year
+
+# xts library for plotting -> xts()
+library(xts)
+timeser <- xts(corals$log_cpue, order.by = corals$sample_date) # some locations share the same sample date
+corals$report_year <- as.Date.numeric("%Y%") # not working
+library(dygraphs)
+dygraph(timeser)
+```
+
+```{r}
+library(fuzzyjoin)
+xoxo <- geo_join(corals, mean_dhw, unit = "km", max_dist = 5.55)
+# 1° lon = 111 km -> 0.05*111 (because it can be 0.05° apart to find the next closest one)
+# geo_join uses km
+
+# 1° lat varies at every lat
+```
+
+
+
+
+
+
+
+
+rts package -> time series analysis for raster stack
+```{r}
+rt <- rts(stack, date)
+plot(rt)
+# add time variable to the raster STACK? via https://gis.stackexchange.com/questions/431997/r-terra-write-multiple-time-series-variables-to-netcdf
+```
+
+but then use what ts package for coral data? how to conenct with dhw?
+
+
+
+
+
+
+
+
+
+
+use extract function to get dhw for specific location
+x = raster
+y = coral lat and lon
+-> gives me timeseries data
+-> pick one or two to start
+
+extract(rasterstack, c(lon,lat)) lon and lat are numbers for coordinates
+extract(rasterstack, data.frame(x=10, y=10))
+years(c(1992:2021)) gives dates and years
+names(of extract object) == years(c(1992:2021))
+as.Date(names(xx), format="X%Y") get X away from column name
+
+coral location -> ts
+loc -> dhw extract -> ts
+correlate
+
+
+ts object
+correlate one ts with another
+ts package might be enough
+lubridate to convert years (columns) to date format
+-> how to do time series regression in r (video)
+
+choose coral locs based on how much data there is for cover (e.g. 20 data points)
+
+use over4dhw, because might say more than mean that has been smoothed
+
+plot all sectors instead of only north, central, south
+
+animate over4dhw and create video (not necessarily with dot over top) -> have that in prez and have plots after another in report (raster stack images and run through)
+
+
+
