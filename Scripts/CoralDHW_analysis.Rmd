@@ -103,16 +103,17 @@ for (year in target_years) {
 }
 ```
 
+# Turn the lists with the rasters into a raster stack
 ```{r, echo = FALSE}
 #  this has all the data and can be drilled into to extract the time series for each location
 stack_means <- rast(means_list) # raster stack
-stack_four_dhw <- rast(four_dhw_list)
-plot(stack_means$`2021`)
+stack_over4dhw <- rast(four_dhw_list)
 # readValues(stack_means$"1993") # one year/summer has more than one value because there's multiple locations!
 summary(stack_means, maxsamp = ncell(stack_means))
 ```
 
-Mean DHW for each summer (1 value per location per year)
+# Plots of the GBR and the mean DHW for each summer 
+1 value per location per summer/year
 ```{r}
 # Convert raster to SpatialPointsDataFrame
 mean_dhw_df <- as.data.frame(stack_means, xy = TRUE)
@@ -126,27 +127,65 @@ ggplot(mean_dhw_df, aes(x, y)) +
   labs(fill = "Mean DHWs") +
   ggtitle("2021") +
   theme_classic()
+```
 
+# Plots of the GBR and the >= 4 DHW
+Days per summer there's been equal or over 4 DHW
+```{r}
 # over4dhw had values of how many days in that summer were over 4 DHW
-over4dhw_df <- as.data.frame(stack_four_dhw, xy = TRUE)
+over4dhw_df <- as.data.frame(stack_over4dhw, xy = TRUE)
+
+labelz <- c("1992" = "1992", 
+            "1993" = "1993",
+            "1994" = "1994", 
+            "1995" = "1995", 
+            "1996" = "1996",
+            "1997" = "1997", 
+            "1998" = "1998", 
+            "1999" = "1999",
+            "2000" = "2000", 
+            "2001" = "2001", 
+            "2002" = "2002", 
+            "2003" = "2003",
+            "2004" = "2004", 
+            "2005" = "2005",
+            "2006" = "2006", 
+            "2007" = "2007",
+            "2008" = "2008", 
+            "2009" = "2009", 
+            "2010" = "2010", 
+            "2011" = "2011", 
+            "2012" = "2012", 
+            "2013" = "2013",
+            "2014" = "2014", 
+            "2015" = "2015", 
+            "2016" = "2016", 
+            "2017" = "2017", 
+            "2018" = "2018", 
+            "2019" = "2019",
+            "2020" = "2020",
+            "2021" = "2021")
+
+# something wrong is coming out
+for (i in 3:32){
+  print(ggplot(over4dhw_df, aes(x, y)) +
+    geom_raster(aes(fill = over4dhw_df[,i, drop = TRUE])) +
+    scale_fill_viridis_c(option = "magma") +
+    coord_quickmap() +
+    labs(fill = "Consecutive days with >= 4-DHWs") +
+    ggtitle(labelz[i-2]) +
+    theme_classic())
+}
+
 ggplot(over4dhw_df, aes(x, y)) +
-  geom_raster(aes(fill = `2021`)) +
+  geom_raster(aes(fill = `2020`)) +
   geom_point(data = corals, aes(x = lon, y = lat), color = "grey", size = 0.3) +
   scale_fill_viridis_c(option = "magma") +
   coord_quickmap() +
-  labs(fill = "Consecutive days with >= 4-DHWs") +
-  ggtitle("2021") +
+  labs(fill = "Mean DHWs") +
+  ggtitle("2020") +
   theme_classic()
 
-```
-
-DHW over 4°C
-```{r}
-# how many days with over 4°C heating weeks
-over4dhw <- as.data.frame(stack_four_dhw)
-coords <- crds(stack_four_dhw)
-over4dhw$lon <- coords[,1, drop = FALSE] # add lon from stack to df
-over4dhw$lat <- coords[,2, drop = FALSE] # add lat from stack to df
 ```
 
 # Load the coral cover data
@@ -283,6 +322,7 @@ ggplot() +
 ## Mean cover of the individual 12 sectors
 This is a more accurate representation of coral cover, as the cover for many sectors was averaged above (into North, Central, and South GBR) and some resolution was lost.
 ```{r}
+# Calculating the mean coral cover per unit effort for each sector ------------------------------
 # Cape Grenville
 mean_cg <- cg %>%
   group_by(sample_year = floor_date(sample_date, "year")) %>%
@@ -343,7 +383,7 @@ mean_sw <-  sw %>%
   group_by(sample_year = floor_date(sample_date, "year")) %>%
   summarize(mean_cover = mean(log_cpue))
 
-# plot all of them
+# Plot all of the sectors ------------------------------------------------------------------------------
 # there are df where there's not continuous values from 1992-2021 because there were no manta tows for some years
 
 # North sectors
@@ -392,6 +432,31 @@ ggsave(filename = here("Plots/south_sectors_mean_cover.pdf"), plot = last_plot()
 
 
 
+
+# Choose coral reef locations
+Choose coral reef location based on how many data points (years) there are. The years correspond to the sample year and not the year the cover was reported.
+```{r}
+# creating new variable -> sample_year based on sample_date
+corals <- mutate(corals, sample_year = floor_date(sample_date, "year"))
+
+# there is data from 1992 - 2021 for some locations, i.e. with the most amount of data points
+loc_all_years <- corals %>%
+  select(sector, reef_name, reef_id, lat, lon, sample_date, sample_year, log_cpue, log_dpue) %>%
+    group_by(reef_id) %>%
+      filter(between(sample_year, as.Date("1992-01-01"), as.Date("2021-01-01")))
+
+corals %>% filter(nrow(reef_id) > 20)
+
+locs <- corals %>%
+  select(sector, reef_name, reef_id, lat, lon, report_year, sample_date, sample_year, log_cpue, log_dpue) %>%
+  group_by(reef_id) %>%
+  filter(sample_year %in% as.Date(c(1992:2021)))
+
+```
+
+
+
+# Time Series Analysis
 ```{r}
 # fulljoin in dplyr to bind dhw dates and coral dates
 # then filter out the NAs because coral cover does not occur every year
@@ -404,30 +469,21 @@ library(dygraphs)
 dygraph(timeser)
 ```
 
-```{r}
-library(fuzzyjoin)
-xoxo <- geo_join(corals, mean_dhw, unit = "km", max_dist = 5.55)
-# 1° lon = 111 km -> 0.05*111 (because it can be 0.05° apart to find the next closest one)
-# geo_join uses km
-
-# 1° lat varies at every lat
-```
 
 
-
-
-
+# Statistics
+Linear regression and checking for temporal and spatial serial dependence
 
 
 
 rts package -> time series analysis for raster stack
+maybe only use ts()
 ```{r}
 rt <- rts(stack, date)
 plot(rt)
 # add time variable to the raster STACK? via https://gis.stackexchange.com/questions/431997/r-terra-write-multiple-time-series-variables-to-netcdf
 ```
 
-but then use what ts package for coral data? how to conenct with dhw?
 
 
 
@@ -436,38 +492,17 @@ but then use what ts package for coral data? how to conenct with dhw?
 
 
 
+# Extra that I don't think I need anymore
+DHW over 4°C
+```{r}
+# how many days with over 4°C heating weeks
+over4dhw <- as.data.frame(stack_four_dhw)
+coords <- crds(stack_four_dhw)
+over4dhw$lon <- coords[,1, drop = FALSE] # add lon from stack to df
+over4dhw$lat <- coords[,2, drop = FALSE] # add lat from stack to df
+```
 
 
-use extract function to get dhw for specific location
-x = raster
-y = coral lat and lon
--> gives me timeseries data
--> pick one or two to start
-
-extract(rasterstack, c(lon,lat)) lon and lat are numbers for coordinates
-extract(rasterstack, data.frame(x=10, y=10))
-years(c(1992:2021)) gives dates and years
-names(of extract object) == years(c(1992:2021))
-as.Date(names(xx), format="X%Y") get X away from column name
-
-coral location -> ts
-loc -> dhw extract -> ts
-correlate
-
-
-ts object
-correlate one ts with another
-ts package might be enough
-lubridate to convert years (columns) to date format
--> how to do time series regression in r (video)
-
-choose coral locs based on how much data there is for cover (e.g. 20 data points)
-
-use over4dhw, because might say more than mean that has been smoothed
-
-plot all sectors instead of only north, central, south
-
-animate over4dhw and create video (not necessarily with dot over top) -> have that in prez and have plots after another in report (raster stack images and run through)
 
 
 
