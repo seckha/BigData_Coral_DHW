@@ -4,7 +4,7 @@ author: "Shannon Eckhardt"
 date: '2022-07-12'
 output: html_document
 ---
-
+# Load libraries
 ```{r, echo = FALSE}
 Sys.setenv(LANG = "en")
 rm(list=ls()) # clear environment
@@ -17,6 +17,7 @@ library(raster)
 library(tidyverse)
 library(readxl)
 library(here)
+library(gganimate)
 ```
 
 #Load the DHW data
@@ -166,17 +167,8 @@ labelz <- c("1992" = "1992",
             "2020" = "2020",
             "2021" = "2021")
 
-# something wrong is coming out
-for (i in 3:32){
-  print(ggplot(over4dhw_df, aes(x, y)) +
-    geom_raster(aes(fill = over4dhw_df[,i, drop = TRUE])) +
-    scale_fill_viridis_c(option = "magma") +
-    coord_quickmap() +
-    labs(fill = "Consecutive days with >= 4-DHWs") +
-    ggtitle(labelz[i-2]) +
-    theme_classic())
-}
 
+# just one year
 ggplot(over4dhw_df, aes(x, y)) +
   geom_raster(aes(fill = `2020`)) +
   geom_point(data = corals, aes(x = lon, y = lat), color = "grey", size = 0.3) +
@@ -185,6 +177,36 @@ ggplot(over4dhw_df, aes(x, y)) +
   labs(fill = "Mean DHWs") +
   ggtitle("2020") +
   theme_classic()
+
+# just loop
+for (i in 3:32){
+  print(ggplot(over4dhw_df, aes(x, y)) +
+    geom_raster(aes(fill = over4dhw_df[,i, drop = TRUE])) +
+    scale_fill_viridis_c(option = "magma") +
+    coord_quickmap() +
+    labs(fill = "Number of days with >= 4-DHWs") +
+    ggtitle(labelz[i-2]) +
+    xlab("Longitude°E") +
+    ylab("Latitude°") +
+    theme_classic())
+}
+
+
+
+# Animation
+# not work
+for (i in 3:32){
+  ggplot(over4dhw_df, aes(x, y)) +
+    geom_raster(aes(fill = over4dhw_df[,i, drop = TRUE])) +
+    scale_fill_viridis_c(option = "magma") +
+    coord_quickmap() +
+    labs(fill = "Number of days with >= 4-DHWs") +
+    ggtitle(labelz[i-2]) +
+    xlab("Longitude°E") +
+    ylab("Latitude°") +
+    theme_classic() +
+    transition_manual(over4dhw_df[,i])
+}
 
 ```
 
@@ -394,7 +416,7 @@ setNames(list(mean_cg, mean_cl, mean_pc, mean_ts), c("mean_cg", "mean_cl", "mean
   geom_point(size = 0.75, alpha = 0.5) +
   xlab("Sample Year") +
   ylab("log(Mean Cover per Unit Effort)") +
-  scale_color_brewer("Sectors", labels = c("Cape Grenville", "Cooktown-Lizard Island", "Princess Charlotte Bay", "Torres Strait"), palette = "Set2") +
+  scale_color_brewer("", labels = c("Cape Grenville", "Cooktown-Lizard Island", "Princess Charlotte Bay", "Torres Strait"), palette = "Set2") +
   ggtitle("North Sectors") +
   theme_classic()
 
@@ -408,7 +430,7 @@ setNames(list(mean_ca, mean_cu, mean_in, mean_to, mean_wh), c("mean_ca", "mean_c
   geom_point(size = 0.75, alpha = 0.5) +
   xlab("Sample Year") +
   ylab("log(Mean Cover per Unit Effort)") +
-  scale_color_brewer("Sectors", labels = c("Cairns", "Cape Upstart", "Innisfail", "Townsville", "Whitsundays"), palette = "Set2") +
+  scale_color_brewer("", labels = c("Cairns", "Cape Upstart", "Innisfail", "Townsville", "Whitsundays"), palette = "Set2") +
   ggtitle("Central Sectors") +
   theme_classic()
 
@@ -422,7 +444,7 @@ setNames(list(mean_cb, mean_po, mean_sw), c("mean_cb", "mean_po", "mean_sw")) %>
   geom_point(size = 0.75, alpha = 0.5) +
   xlab("Sample Year") +
   ylab("log(Mean Cover per Unit Effort)") +
-  scale_color_brewer("Sectors", labels = c("Capricorn-Bunker", "Pompey", "Swain"), palette = "Set2") +
+  scale_color_brewer("", labels = c("Capricorn-Bunker", "Pompey", "Swain"), palette = "Set2") +
   ggtitle("South Sectors") +
   theme_classic()
 
@@ -440,18 +462,37 @@ Choose coral reef location based on how many data points (years) there are. The 
 corals <- mutate(corals, sample_year = floor_date(sample_date, "year"))
 
 # there is data from 1992 - 2021 for some locations, i.e. with the most amount of data points
-loc_all_years <- corals %>%
-  select(sector, reef_name, reef_id, lat, lon, sample_date, sample_year, log_cpue, log_dpue) %>%
-    group_by(reef_id) %>%
-      filter(between(sample_year, as.Date("1992-01-01"), as.Date("2021-01-01")))
 
-corals %>% filter(nrow(reef_id) > 20)
+# count the number of times the reef_id appears in the dataframe
+tt <- table(corals$reef_id)
 
-locs <- corals %>%
-  select(sector, reef_name, reef_id, lat, lon, report_year, sample_date, sample_year, log_cpue, log_dpue) %>%
-  group_by(reef_id) %>%
-  filter(sample_year %in% as.Date(c(1992:2021)))
+# tt > 20 -> looks at which reef id's appear more than 20 times
+# tt[tt > 20] -> from the table select which reef id's appear more than 20 times
+# names(tt[tt > 20]) -> gets their names = reef id's
+# corals$reef_id %in% names(tt[tt > 20]) -> rows of reef_id that matches the > 20 reef_id appearances
+# FALSE rows removed, TRUE rows kept
 
+corals_over24obs <- corals[corals$reef_id %in% names(tt[tt > 24]),]
+n_distinct(corals_over24obs$reef_id) # 9 reefs have over 25 years of data
+unique(corals_over24obs$sector)
+# first time a location from the north appears
+# 1 location from the north GBR -> Cooktown Lizard-Island with over 24 obs (= 25 obs)
+
+# pick the north reef out that will be analyzed -> MACGILLIVRAY REEF
+north_reef <- filter(corals_over24obs, sector == "CL")
+
+
+corals_over27obs <- corals[corals$reef_id %in% names(tt[tt > 27]),]
+n_distinct(corals_over27obs$reef_id)
+unique(corals_over27obs$sector)
+# 3 locations -> 2 in central GBR (Cairns, Townsville), 1 in south GBR (Swain)
+
+# choose one location for central and one for south
+# chose AGINCOURT REEFS (NO 1) because there's 28 data points, whereas RIB REEF only has 27
+# only 1 for south with 27 obs -> CHINAMAN REEF(22102)
+
+
+# no corals have over 28 obs (= 28 is the limit)
 ```
 
 
