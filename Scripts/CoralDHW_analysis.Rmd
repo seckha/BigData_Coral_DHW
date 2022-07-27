@@ -455,8 +455,13 @@ ggsave(filename = here("Plots/south_sectors_mean_cover.pdf"), plot = last_plot()
 
 
 
+
 # Choose coral reef locations
 Choose coral reef location based on how many data points (rows) there are. How many rows there is directly corresponds to how many times the reef was sampled.
+
+North reef: *MACGILLIVRAY REEF* (25 data points)
+Central reef: *AGINCOURT REEFS (NO 1)* (28 data points)
+South reef: *CHINAMAN REEF(22102)* (27 data points)
 ```{r}
 # there is data from 1992 - 2021 for some locations, i.e. with the most amount of data points
 
@@ -492,21 +497,35 @@ south_reef <- filter(corals_over27obs, reef_id == "22102S")
 # no corals have over 28 obs (= 28 is the limit)
 ```
 
-# Link DHW and coral data
+# Link DHW and coral data -> SOMETHING WENT WRONG
 Get the DHWs for the specific reef locations chosen above: north_reef, central_reef, and south_reef. This will then give me the time series data I need.
-
 ```{r}
 # extract() -> extract values from a SpatRaster for a set of locations
   # lon,lat in that order
   # specify that lon and lat come from a data frame, not a vector or a matrix
-  # xy = TRUE to keep lon and lat
-ex_north <- terra::extract(stack_over4dhw, data.frame(north_reef$lon, north_reef$lat), xy = TRUE)
-ex_central <- terra::extract(stack_over4dhw, data.frame(central_reef$lon, central_reef$lat), xy = TRUE)
-ex_south <- terra::extract(stack_over4dhw, data.frame(south_reef$lon, south_reef$lat), xy = TRUE)
-# maybe have to take out xy later
+  # xy = TRUE to keep lon and lat, but I don't need them in the TS, so will omit
+ex_north <- terra::extract(stack_over4dhw, data.frame(north_reef$lon, north_reef$lat))
+ex_north_means <- terra::extract(stack_means, data.frame(north_reef$lon, north_reef$lat))
+
+ex_central <- terra::extract(stack_over4dhw, data.frame(central_reef$lon, central_reef$lat))
+ex_south <- terra::extract(stack_over4dhw, data.frame(south_reef$lon, south_reef$lat))
+
+# MAJOR PROBLEM
+  # for each of the 3 reef locations the over4dhw value is 0 because when looking at stack_means, you can see that the mean is never over 4
+# MINOR PROBLEM
+  # the df ex_north and both others should only have one line with values
+  # this is because the lon,lat in the coral df appear 25-28 times (as many observations as there are)
+  # could be fixed by just filtering the lat and lon into a new variable (one row, two values (x and y))
+  # BUT all the values are the same anyways (see ex_north_means)
+  
+
+
 ```
 
-
+## Rename the columns and turn them into dates to use for the time series
+```{r}
+names(ex_north)
+```
 
 
 
