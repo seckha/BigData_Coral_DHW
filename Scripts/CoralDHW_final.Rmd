@@ -390,6 +390,15 @@ p <- ggplot(mean_dhw_df, aes(x, y)) +
 
 
 # Animation
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
 ```
 
 
@@ -514,7 +523,7 @@ s_broomfield <- filter(south_select, reef_name == "BROOMFIELD REEF")
 s_credlin <- filter(south_select, reef_name == "CREDLIN REEFS (EAST)")
 ```
 
-# Link DHW and coral data -> SOMETHING WENT WRONG
+# Link mean DHW and coral data
 Get the DHWs for the specific reef locations chosen above: north_reef, central_reef, and south_reef. This will then give me the time series data I need. The 10 reef locations I have:
 North GBR: *MACGILLIVRAY REEF* (25 obs), *BOULDER REEF* (20 obs), *13124S* (19 obs)
 Central GBR: *AGINCOURT REEFS (NO 1)* (28 obs), *FEATHER REEF* (25 obs), *RIB REEF* (28 obs), *19138S* (23 obs)
@@ -555,7 +564,32 @@ ex_broomfield_xy <- terra::extract(stack_means, data.frame(s_broomfield$lon, s_b
 
 ex_credlin <- terra::extract(stack_means, data.frame(s_credlin$lon, s_credlin$lat))
 ex_credlin_xy <- terra::extract(stack_means, data.frame(s_credlin$lon, s_credlin$lat), xy = TRUE)
+```
 
+## Rename the columns and turn them into dates to use for the time series
+```{r}
+
+# I should be able to make a loop to do this, but can't get it right
+extracts_list <- list(ex_macgillivray, ex_boulder, ex_13124S, ex_agincourt, ex_feather, ex_rib, ex_19138S, ex_chinaman, ex_broomfield, ex_credlin)
+
+names(extracts_list) <- c("ex_macgillivray", "ex_boulder", "ex_13124S", "ex_agincourt", "ex_feather", "ex_rib", "ex_19138S","ex_chinaman", "ex_broomfield", "ex_credlin")
+
+for (i in 1:length(extracts_list)){
+  # get rid of first column called ID
+  extracts_list[[i]] <- select(extracts_list[[i]], -"ID")
+  # select one row (because all lines contain the same values) and transpose
+  extracts_list[[i]] <- extracts_list[[i]][1,]
+  # transpose
+  extracts_list[[i]] <- as.data.frame(t(extracts_list[[i]]))
+  # turn first row names (years) into a column and call the column "year"
+  extracts_list[[i]] <- tibble::rownames_to_column(extracts_list[[i]], "year")
+  # name the second column "mean_dhw"
+  names(extracts_list[[i]])[2] <- "mean_dhw"
+  # convert the year <chr> into a date
+  extracts_list[[i]][1]$year <- ymd(sprintf("%s-01-01", extracts_list[[i]][1]$year))
+}
+# I now have all the coral sites with year and mean dhw in a list
+```
 
 
 
