@@ -1,9 +1,10 @@
 ---
-title: "DHW"
+title: "BEES 9041 - Coral cover and DHW in the GBR"
 author: "Shannon Eckhardt"
-date: '2022-07-12'
+date: '2022-07-28'
 output: html_document
 ---
+
 # Load libraries
 ```{r, echo = FALSE}
 Sys.setenv(LANG = "en")
@@ -24,7 +25,6 @@ library(plotly) # for interactive map
 
 # Load the DHW data
 There is a DHW file for each day from 1992-2021 that has to be downloaded from the NOAA Coral Watch Website *(see other script for extraction of the files)*. The files can be found [here](https://www.star.nesdis.noaa.gov/pub/sod/mecb/crw/data/5km/v3.1_op/nc/v1.0/monthly/).
-
 ```{r}
 # create a list of the DHW files and extract them from a folder
 ncfiles <-  list.files(
@@ -115,87 +115,6 @@ stack_over4dhw <- rast(four_dhw_list)
 summary(stack_means, maxsamp = ncell(stack_means))
 ```
 
-# Plots of the GBR and the mean DHW for each summer 
-1 value per location per summer/year
-```{r}
-# Convert raster to SpatialPointsDataFrame
-mean_dhw_df <- as.data.frame(stack_means, xy = TRUE)
-
-# labels for the plot titles
-labelz <- c("1992", "1993","1994", "1995", "1996","1997",  "1998", "1999", "2000", "2001", "2002", "2003", "2004", "2005","2006", "2007","2008", "2009", "2010", "2011",  "2012", "2013","2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021")
-
-# mean DHW - just one year
-ggplot(mean_dhw_df, aes(x, y)) +
-  geom_raster(aes(fill = `2021`)) +
-  geom_point(data = corals, aes(x = lon, y = lat), color = "grey", size = 0.3) +
-  scale_fill_viridis_c(option = "inferno") +
-  coord_quickmap() +
-  labs(fill = "Mean DHWs") +
-  ggtitle("2021") +
-  theme_classic()
-```
-
-# Plots of the GBR and the >= 4 DHW
-Days per summer there's been equal or over 4 DHW
-```{r}
-# over4dhw had values of how many days in that summer were over 4 DHW
-over4dhw_df <- as.data.frame(stack_over4dhw, xy = TRUE)
-
-# just one year
-ggplot(over4dhw_df, aes(x, y)) +
-  geom_raster(aes(fill = `2020`)) +
-  geom_point(data = corals, aes(x = lon, y = lat), color = "grey", size = 0.3) +
-  scale_fill_viridis_c(option = "inferno") +
-  coord_quickmap() +
-  labs(fill = "Mean DHWs") +
-  ggtitle("2020") +
-  theme_classic()
-
-# just loop
-for (i in 3:32){
-  print(ggplot(over4dhw_df, aes(x, y)) +
-    geom_raster(aes(fill = over4dhw_df[,i, drop = TRUE])) +
-    geom_point(data = corals, aes(lon, lat), color = "grey", size = 0.3) +
-    scale_fill_viridis_c(option = "inferno") +
-    coord_quickmap() +
-    labs(fill = "Number of days with >= 4-DHWs") +
-    ggtitle(labelz[i-2]) +
-    xlab("Longitude°E") +
-    ylab("Latitude°") +
-    theme_classic())
-}
-
-# Interactive map
-# to look for sites that have experienced DHW >= 4
-
-p <- ggplot(over4dhw_df, aes(x, y)) +
-      geom_raster(aes(fill = `2021`)) +
-      geom_point(data = northGBR, aes(lon, lat), color = "grey", size = 0.5) +
-      scale_fill_viridis_c(option = "inferno") +
-      coord_quickmap() +
-      labs(fill = "Number of days with >= 4-DHWs") +
-      ggtitle("2021") +
-      xlab("Longitude°E") +
-      ylab("Latitude°") +
-      theme_classic()
- ggplotly(p)
-
-# Animation
-# not work
-for (i in 3:32){
-  ggplot(over4dhw_df, aes(x, y)) +
-    geom_raster(aes(fill = over4dhw_df[,i, drop = TRUE])) +
-    scale_fill_viridis_c(option = "magma") +
-    coord_quickmap() +
-    labs(fill = "Number of days with >= 4-DHWs") +
-    ggtitle(labelz[i-2]) +
-    xlab("Longitude°E") +
-    ylab("Latitude°") +
-    theme_classic() +
-    transition_manual(over4dhw_df[,i])
-}
-```
-
 # Load the coral cover data
 The coral cover data comes from the Australian Institute for Marine Science (AIMS) Long-term Monitoring Program (LTMP) in the GBR and can be found here: (AIMS LTMP)[https://apps.aims.gov.au/metadata/view/a17249ab-5316-4396-bb27-29f2d568f727]. They have been recording coral cover and other changes in reef communities since 1983, however, the coral cover data starts in 1992.
 
@@ -252,13 +171,6 @@ meandead_northGBR <- northGBR %>%
     group_by(sample_year = floor_date(sample_date, "year")) %>%
     summarize(meandead_north = mean(log_dpue))
 
-ggplot(mean_northGBR, aes(x = sample_year, y = mean_north)) +
-  geom_point() +
-  geom_line() +
-  ggtitle("Northern GBR") +
-  ylab("Log(Mean North)") +
-  theme_classic()
-
 # CENTRAL ------------------------------------------
 ca <- filter(corals, sector == "CA")
 cu <- filter(corals, sector == "CU")
@@ -275,13 +187,6 @@ meandead_centralGBR <- centralGBR %>%
     group_by(sample_year = floor_date(sample_date, "year")) %>%
     summarize(meandead_central = mean(log_dpue))
 
-ggplot(mean_centralGBR, aes(x = sample_year, y = mean_central)) +
-  geom_point() +
-  geom_line() +
-  ggtitle("Central GBR") +
-   ylab("Log(Mean Central)") +
-  theme_classic()
-
 # SOUTH ------------------------------------------
 cb <- filter(corals, sector == "CB")
 po <- filter(corals, sector == "PO")
@@ -295,13 +200,6 @@ mean_southGBR <- southGBR %>%
 meandead_southGBR <- southGBR %>%
     group_by(sample_year = floor_date(sample_date, "year")) %>%
     summarize(meandead_south = mean(log_dpue))
-
-ggplot(mean_southGBR, aes(x = sample_year, y = mean_south)) +
-  geom_point() +
-  geom_line() +
-  ggtitle("Southern GBR") +
-  ylab("Log(Mean South)") +
-  theme_classic()
 
 # mean coral cover
 ggplot() +
@@ -438,16 +336,131 @@ ggsave(filename = here("Plots/south_sectors_mean_cover.pdf"), plot = last_plot()
 
 ```
 
+ -> color based on how north they are
 
 
+# Plots of the GBR and the mean DHW for each summer 
+1 value per location per summer/year
+```{r}
+# Convert raster to SpatialPointsDataFrame
+mean_dhw_df <- as.data.frame(stack_means, xy = TRUE)
+
+# labels for the plot titles
+labelz <- c("1992", "1993","1994", "1995", "1996","1997",  "1998", "1999", "2000", "2001", "2002", "2003", "2004", "2005","2006", "2007","2008", "2009", "2010", "2011",  "2012", "2013","2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021")
+
+# mean DHW plots for just one year
+ggplot(mean_dhw_df, aes(x, y)) +
+  geom_raster(aes(fill = `2021`)) +
+  geom_point(data = corals, aes(x = lon, y = lat), color = "grey", size = 0.3) +
+  scale_fill_viridis_c(option = "inferno") +
+  coord_quickmap() +
+  labs(fill = "Mean DHWs") +
+  ggtitle("2021") +
+  theme_classic()
 
 
+# loop of plots for all the years
+for (i in 3:32){
+  print(ggplot(mean_dhw_df, aes(x, y)) +
+    geom_raster(aes(fill = mean_dhw_df[,i, drop = TRUE])) +
+    geom_point(data = northGBR, aes(lon, lat), color = "#CCCCCC", size = 0.3) +
+    geom_point(data = centralGBR, aes(lon, lat), color = "#999999", size = 0.3) +
+    geom_point(data = southGBR, aes(lon, lat), color = "#666666", size = 0.3) +  
+    scale_fill_viridis_c(option = "inferno") +
+    coord_quickmap() +
+    labs(fill = "Mean DHWs [°C]") +
+    ggtitle(labelz[i-2]) +
+    xlab("Longitude°E") +
+    ylab("Latitude°") +
+    theme_classic())
+}
+
+# interactive map for one year
+p <- ggplot(mean_dhw_df, aes(x, y)) +
+      geom_raster(aes(fill = `2021`)) +
+      geom_point(data = corals, aes(lon, lat), color = "grey", size = 0.5) +
+      scale_fill_viridis_c(option = "inferno") +
+      coord_quickmap() +
+      labs(fill = "Mean DHWs [°C]") +
+      ggtitle("2021") +
+      xlab("Longitude°E") +
+      ylab("Latitude°") +
+      theme_classic()
+ ggplotly(p)
+
+
+# Animation
+```
+
+
+# Plots of the GBR and the >= 4 DHW --------------------------------------------------- maybe remove
+Days per summer there's been equal or over 4 DHW
+```{r}
+# over4dhw had values of how many days in that summer were over 4 DHW
+over4dhw_df <- as.data.frame(stack_over4dhw, xy = TRUE)
+
+# plot for just one year
+ggplot(over4dhw_df, aes(x, y)) +
+  geom_raster(aes(fill = `2020`)) +
+  geom_point(data = corals, aes(x = lon, y = lat), color = "grey", size = 0.3) +
+  scale_fill_viridis_c(option = "magma") +
+  coord_quickmap() +
+  labs(fill = "Mean DHWs") +
+  ggtitle("2020") +
+  theme_classic()
+
+# loop of plots for all the years
+for (i in 3:32){
+  print(ggplot(over4dhw_df, aes(x, y)) +
+    geom_raster(aes(fill = over4dhw_df[,i, drop = TRUE])) +
+    geom_point(data = corals, aes(lon, lat), color = "grey", size = 0.3) +
+    scale_fill_viridis_c(option = "magma") +
+    coord_quickmap() +
+    labs(fill = "Number of days with >= 4-DHWs") +
+    ggtitle(labelz[i-2]) +
+    xlab("Longitude°E") +
+    ylab("Latitude°") +
+    theme_classic())
+}
+
+# Interactive map for one year
+# to look for sites that have experienced DHW >= 4
+
+p <- ggplot(over4dhw_df, aes(x, y)) +
+      geom_raster(aes(fill = `2021`)) +
+      geom_point(data = northGBR, aes(lon, lat), color = "grey", size = 0.5) +
+      scale_fill_viridis_c(option = "magma") +
+      coord_quickmap() +
+      labs(fill = "Number of days with >= 4-DHWs") +
+      ggtitle("2021") +
+      xlab("Longitude°E") +
+      ylab("Latitude°") +
+      theme_classic()
+ ggplotly(p)
+
+# Animation
+# not work
+for (i in 3:32){
+  ggplot(over4dhw_df, aes(x, y)) +
+    geom_raster(aes(fill = over4dhw_df[,i, drop = TRUE])) +
+    scale_fill_viridis_c(option = "magma") +
+    coord_quickmap() +
+    labs(fill = "Number of days with >= 4-DHWs") +
+    ggtitle(labelz[i-2]) +
+    xlab("Longitude°E") +
+    ylab("Latitude°") +
+    theme_classic() +
+    transition_manual(over4dhw_df[,i])
+}
+ 
+ 
+ 
+ 
+```
 # Choose coral reef locations
-Choose coral reef location based on how many data points (rows) there are. How many rows there is directly corresponds to how many times the reef was sampled.
+Choose coral reef location based on how many data points (rows) there are. How many rows there is directly corresponds to how many times the reef was sampled. Choose 10 locations distributed along the GBR.
 
-North reef: *MACGILLIVRAY REEF* (25 data points)
-Central reef: *AGINCOURT REEFS (NO 1)* (28 data points)
-South reef: *CHINAMAN REEF(22102)* (27 data points)
+
 ```{r}
 # there is data from 1992 - 2021 for some locations, i.e. with the most amount of data points
 
@@ -460,289 +473,91 @@ tt <- table(corals$reef_id)
 # corals$reef_id %in% names(tt[tt > 20]) -> rows of reef_id that matches the > 20 reef_id appearances
 # FALSE rows removed, TRUE rows kept
 
-corals_over24obs <- corals[corals$reef_id %in% names(tt[tt > 24]),]
-n_distinct(corals_over24obs$reef_id) # 9 reefs have over 25 years of data
-unique(corals_over24obs$sector)
-# first time a location from the north appears
-# 1 location from the north GBR -> Cooktown Lizard-Island with over 24 obs (= 25 obs)
+# North GBR -----------------------------------------------------
+north_select <- northGBR[northGBR$reef_id %in% names(tt[tt > 18]),]
+n_distinct(north_select$reef_id)
+
+# MACGILLIVRAY REEF (25 obs) -> not NO NAME REEF because it is right next to mac reef (-14.65) (CL)
+# BOULDER REEF (20 obs) -> -15.41667 (CL)
+# 13124S (19 obs) -> -13.86667
+# 2 in CL, but if I go any lower than that there's basically no data points left
 
 # pick the north reef out that will be analyzed -> MACGILLIVRAY REEF
-north_reef <- filter(corals_over24obs, sector == "CL")
+n_macgillivray <- filter(north_select, reef_name == "MACGILLIVRAY REEF")
+n_13124S <- filter(north_select, reef_name == "13124S")
+n_boulder <- filter(north_select, reef_name == "BOULDER REEF")
 
+# Central GBR ------------------------------------------------
+central_select <- centralGBR[centralGBR$reef_id %in% names(tt[tt > 22]),]
+n_distinct(central_select$reef_id)
 
-corals_over27obs <- corals[corals$reef_id %in% names(tt[tt > 27]),]
-n_distinct(corals_over27obs$reef_id)
-unique(corals_over27obs$sector)
-# 3 locations -> 2 in central GBR (Cairns, Townsville), 1 in south GBR (Swain)
+# AGINCOURT REEFS (NO 1) (28 obs) -> -16.05000 (Cairns)
+# FEATHER REEF (25 obs) -> -17.53333	(Innisfail)
+# RIB REEF (28 obs) -> -18.48333 (Townsville)
+# 19138S (23 obs) -> -19.80833	(Whitsundays)
 
-# choose one location for central and one for south
-# chose AGINCOURT REEFS (NO 1) because there's 28 data points, whereas RIB REEF only has 27
-# only 1 for south with 27 obs -> CHINAMAN REEF(22102)
-central_reef <- filter(corals_over27obs, reef_id == "15099C")
-south_reef <- filter(corals_over27obs, reef_id == "22102S")
-# no corals have over 28 obs (= 28 is the limit)
+c_agincourt <- filter(central_select, reef_name == "AGINCOURT REEFS (NO 1)")
+c_feather <- filter(central_select, reef_name == "FEATHER REEF")
+c_rib <- filter(central_select, reef_name == "RIB REEF")
+c_19138S <- filter(central_select, reef_name == "19138S")
+
+# South GBR -----------------------------------
+south_select <- southGBR[southGBR$reef_id %in% names(tt[tt > 20]),]
+n_distinct(south_select$reef_id)
+unique(south_select$reef_name)
+# CHINAMAN REEF(22102) (28 obs) -> -22.00833 (SW)
+# BROOMFIELD REEF (27 obs) -> -23.27500 (CB)
+# CREDLIN REEFS (EAST) (21 obs) -> -20.54167	(PO)
+
+s_chinaman <- filter(south_select, reef_name == "CHINAMAN REEF(22102)")
+s_broomfield <- filter(south_select, reef_name == "BROOMFIELD REEF")
+s_credlin <- filter(south_select, reef_name == "CREDLIN REEFS (EAST)")
 ```
 
 # Link DHW and coral data -> SOMETHING WENT WRONG
-Get the DHWs for the specific reef locations chosen above: north_reef, central_reef, and south_reef. This will then give me the time series data I need.
+Get the DHWs for the specific reef locations chosen above: north_reef, central_reef, and south_reef. This will then give me the time series data I need. The 10 reef locations I have:
+North GBR: *MACGILLIVRAY REEF* (25 obs), *BOULDER REEF* (20 obs), *13124S* (19 obs)
+Central GBR: *AGINCOURT REEFS (NO 1)* (28 obs), *FEATHER REEF* (25 obs), *RIB REEF* (28 obs), *19138S* (23 obs)
+South GBR: *CHINAMAN REEF(22102)* (28 obs), *BROOMFIELD REEF* (27 obs), *CREDLIN REEFS (EAST)* (21 obs)
 ```{r}
 # extract() -> extract values from a SpatRaster for a set of locations
-  # lon,lat in that order
+  # lon,lat -> in that order
   # specify that lon and lat come from a data frame, not a vector or a matrix
-  # xy = TRUE to keep lon and lat, but I don't need them in the TS, so will omit
-ex_north <- terra::extract(stack_over4dhw, data.frame(north_reef$lon, north_reef$lat), xy = TRUE)
-ex_north_means <- terra::extract(stack_means, data.frame(north_reef$lon, north_reef$lat))
+  # xy = TRUE to keep lon and lat (don't need them in TS, but I need them for statistics)
+ex_macgillivray <- terra::extract(stack_means, data.frame(n_macgillivray$lon, n_macgillivray$lat))
+ex_macgillivray_xy <- terra::extract(stack_means, data.frame(n_macgillivray$lon, n_macgillivray$lat), xy = TRUE)
 
-ex_central <- terra::extract(stack_over4dhw, data.frame(central_reef$lon, central_reef$lat))
-ex_south <- terra::extract(stack_over4dhw, data.frame(south_reef$lon, south_reef$lat))
+ex_boulder <- terra::extract(stack_means, data.frame(n_boulder$lon, n_boulder$lat))
+ex_boulder_xy <- terra::extract(stack_means, data.frame(n_boulder$lon, n_boulder$lat), xy = TRUE)
 
-# MAJOR PROBLEM
-  # for each of the 3 reef locations the over4dhw value is 0 because when looking at stack_means, you can see that the mean is never over 4
-# MINOR PROBLEM
-  # the df ex_north and both others should only have one line with values
-  # this is because the lon,lat in the coral df appear 25-28 times (as many observations as there are)
-  # could be fixed by just filtering the lat and lon into a new variable (one row, two values (x and y))
-  # BUT all the values are the same anyways (see ex_north_means)
+ex_13124S <- terra::extract(stack_means, data.frame(n_13124S$lon, n_13124S$lat))
+ex_13124S_xy <- terra::extract(stack_means, data.frame(n_13124S$lon, n_13124S$lat), xy = TRUE)
 
 
+ex_agincourt <- terra::extract(stack_means, data.frame(c_agincourt$lon, c_agincourt$lat))
+ex_agincourt_xy <- terra::extract(stack_means, data.frame(c_agincourt$lon, c_agincourt$lat), xy = TRUE)
 
-ggplot(over4dhw_df, aes(x, y)) +
-  geom_raster(aes(fill = `2021`)) +
-  geom_point(data = north_reef, aes(x = lon, y = lat), color = "blue", size = 1.5) +
-  geom_point(data = central_reef, aes(x = lon, y = lat), color = "green", size = 1.5) +
-  geom_point(data = south_reef, aes(x = lon, y = lat), color = "lightblue", size = 1.5) +
-  scale_fill_viridis_c(option = "magma") +
-  coord_quickmap() +
-  labs(fill = "Mean DHWs") +
-  ggtitle("2021") +
-  theme_classic()
+ex_feather <- terra::extract(stack_means, data.frame(c_feather$lon, c_feather$lat))
+ex_feather_xy <- terra::extract(stack_means, data.frame(c_feather$lon, c_feather$lat), xy = TRUE)
 
-for (i in 3:32){
-  print(ggplot(over4dhw_df, aes(x, y)) +
-    geom_raster(aes(fill = over4dhw_df[,i, drop = TRUE])) +
-    geom_point(data = north_reef, aes(x = lon, y = lat), color = "blue", size = 1.5) +
-    geom_point(data = central_reef, aes(x = lon, y = lat), color = "green", size = 1.5) +
-    geom_point(data = south_reef, aes(x = lon, y = lat), color = "lightblue", size = 1.5) +
-    scale_fill_viridis_c(option = "magma") +
-    coord_quickmap() +
-    labs(fill = "Number of days with >= 4-DHWs") +
-    ggtitle(labelz[i-2]) +
-    xlab("Longitude°E") +
-    ylab("Latitude°") +
-    theme_classic())
-}
-```
+ex_rib <- terra::extract(stack_means, data.frame(c_rib$lon, c_rib$lat))
+ex_rib_xy <- terra::extract(stack_means, data.frame(c_rib$lon, c_rib$lat), xy = TRUE)
 
-## Rename the columns and turn them into dates to use for the time series
-```{r}
-# get rid of first column called ID
-ex_north <- select(ex_north, -"ID")
-# select one line of ex_north (because all lines contain the same values) and transpose
-ex_north <- ex_north[1,]
-# transpose and then have two rows "year" and "4dhw_days"
-ex_north <- as.data.frame(t(ex_north))
-# turn first row names (years) into a column and call the column "years"
-ex_north <- tibble::rownames_to_column(ex_north, "year")
-# name the second column "dhw_days"
-names(ex_north)[2] <- "dhw_days"
-```
+ex_19138S <- terra::extract(stack_means, data.frame(c_19138S$lon, c_19138S$lat))
+ex_19138S_xy <- terra::extract(stack_means, data.frame(c_19138S$lon, c_19138S$lat), xy = TRUE)
 
-# Find the locations found in the interactive map
-```{r}
-north19 <- northGBR[northGBR$reef_id %in% names(tt[tt > 19]),]
-n_distinct(north19$reef_id) # 8 reefs with over 20 data points
-unique(north19$reef_id)
 
-central19 <- centralGBR[centralGBR$reef_id %in% names(tt[tt > 19]),]
-n_distinct(central19$reef_id)
-unique(central19$reef_id)
+ex_chinaman <- terra::extract(stack_means, data.frame(s_chinaman$lon, s_chinaman$lat))
+ex_chinaman_xy <- terra::extract(stack_means, data.frame(s_chinaman$lon, s_chinaman$lat), xy = TRUE)
 
-south19 <- southGBR[southGBR$reef_id %in% names(tt[tt > 19]),]
-n_distinct(south19$reef_id)
-unique(south19$reef_id)
+ex_broomfield <- terra::extract(stack_means, data.frame(s_broomfield$lon, s_broomfield$lat))
+ex_broomfield_xy <- terra::extract(stack_means, data.frame(s_broomfield$lon, s_broomfield$lat), xy = TRUE)
 
-# now we just have to find these in the interactive plot
+ex_credlin <- terra::extract(stack_means, data.frame(s_credlin$lon, s_credlin$lat))
+ex_credlin_xy <- terra::extract(stack_means, data.frame(s_credlin$lon, s_credlin$lat), xy = TRUE)
 
-# Interactive map
-# to look for sites that have experienced DHW >= 4
 
-# central ones
-# these all don't seem to be affected by dhw at all!!
-p <- ggplot(over4dhw_df, aes(x, y)) +
-      geom_raster(aes(fill = `2021`)) +
-      geom_point(data = north19, aes(lon, lat), color = "grey", size = 0.5) +
-      scale_fill_viridis_c(option = "magma") +
-      coord_quickmap() +
-      labs(fill = "Number of days with >= 4-DHWs") +
-      ggtitle("2021") +
-      xlab("Longitude°E") +
-      ylab("Latitude°") +
-      theme_classic()
- ggplotly(p)
+
+
+
  
- # lon: 150.0917 lat: -19.75833 (not in over 4 DHW area but right next to it)
- # HYDE REEF (Whitsundays) -> 20 obs
- # observations from 2018-2020 missing which is not ideal
- # SLATE REEF (Whitsundays) -> 19 obs (no tows in 2020)
- 
- # north ones
- p <- ggplot(over4dhw_df, aes(x, y)) +
-      geom_raster(aes(fill = `2020`)) +
-      geom_point(data = north19, aes(lon, lat), color = "grey", size = 0.5) +
-      scale_fill_viridis_c(option = "magma") +
-      coord_quickmap() +
-      labs(fill = "Number of days with >= 4-DHWs") +
-      ggtitle("2021") +
-      xlab("Longitude°E") +
-      ylab("Latitude°") +
-      theme_classic()
- ggplotly(p)
- 
- # south ones
- p <- ggplot(over4dhw_df, aes(x, y)) +
-      geom_raster(aes(fill = `2021`)) +
-      geom_point(data = south19, aes(lon, lat), color = "grey", size = 0.5) +
-      scale_fill_viridis_c(option = "magma") +
-      coord_quickmap() +
-      labs(fill = "Number of days with >= 4-DHWs") +
-      ggtitle("2021") +
-      xlab("Longitude°E") +
-      ylab("Latitude°") +
-      theme_classic()
- ggplotly(p)
- 
-# SO
- # north = LINNET REEF (CL) -> 2020 not missing
- # central = SLATE REEF (WH) -> 2020 missing
- # south = CREDLIN REEFS (EAST) -> 2020 missing
-
-linnet_north <- filter(north19, reef_name == "LINNET REEF")
-slate_central <- filter(corals, reef_name == "SLATE REEF")
-credlin_south <- filter(south19, reef_name == "CREDLIN REEFS (EAST)")
- 
-ex_linnet <- terra::extract(stack_over4dhw, data.frame(linnet_north$lon, linnet_north$lat)) # all zeros!!
-ex_linnet_means <- terra::extract(stack_means, data.frame(linnet_north$lon, linnet_north$lat))
-
-ex_slate <- terra::extract(stack_over4dhw, data.frame(slate_central$lon, slate_central$lat)) # all zeros!! 
-ex_slate_means <- terra::extract(stack_means, data.frame(slate_central$lon, slate_central$lat))
-
-ex_credlin <- terra::extract(stack_over4dhw, data.frame(credlin_south$lon, credlin_south$lat)) # all zeros!! ?????????
-ex_credlin_means <- terra::extract(stack_means, data.frame(credlin_south$lon, credlin_south$lat)) # the means can't be this low??
- 
-```
-
-
-
-
-
-
-
-# Time Series Analysis
-```{r}
-# just check with one df that's not going to be used (just a check)
-
-# checky (osborne reef coral df)
-# ex_osborne_north is the extract of DHW
-
-# get rid of first column called ID
-ex_osborne_north <- select(ex_osborne_north, -"ID")
-# select one line of ex_north (because all lines contain the same values) and transpose
-ex_osborne_north <- ex_osborne_north[1,]
-# transpose and then have two rows "year" and "4dhw_days"
-ex_osborne_north <- as.data.frame(t(ex_osborne_north))
-# turn first row names (years) into a column and call the column "years"
-ex_osborne_north <- tibble::rownames_to_column(ex_osborne_north, "year")
-# name the second column "dhw_days"
-names(ex_osborne_north)[2] <- "dhw_days"
-
-# get rid of first column called ID
-ex_osborne_means <- select(ex_osborne_means, -"ID")
-# select one line of ex_north (because all lines contain the same values) and transpose
-ex_osborne_means <- ex_osborne_means[1,]
-# transpose and then have two rows "year" and "4dhw_days"
-ex_osborne_means <- as.data.frame(t(ex_osborne_means))
-# turn first row names (years) into a column and call the column "years"
-ex_osborne_means <- tibble::rownames_to_column(ex_osborne_means, "year")
-# name the second column "dhw_days"
-names(ex_osborne_means)[2] <- "dhw_days"
-
-
-ts(checky$log_cpue, start = 1993, frequency = 1) # I only have 7 data points, so it assumes that it ends in 1999
-ts_osborne <- ts(ex_osborne_north$dhw_days, start = 1992)
-plot(ts_osborne)
-ts_osborne_means <- ts(ex_osborne_means$dhw_days, start = 1992)
-plot(ts_osborne_means)
-
-# how to do ts for coral cover of osborne reef because non-constant time intervals?
-ggplot(checky, aes(x = sample_date, y = log_cpue)) +
-  geom_point() +
-  geom_line() +
-  theme_classic()
-
-# merge timeseries
-ts(c(ts_1, ts_2), start = start(ts_1),  frequency = frequency(ts_1))
-```
-
-1o reefs in total, dispersed
-
-losing spatial resolution, spatial precision, means as indicator for warmer and cooler 
--> not a guarantee for bleaching event due to heat
-using means as tools for exploration because there is some variation
-
-zoo -> irregular timeseries
-crosscorrelation functions
-
-stats -> have df as separate vectors
-mean dhw per site + xy
-associate ts object for dhw with ts object for coral reef
-feed through crosscorrelation function
-
-
-cots + coral trout -> ab-line (puts vertical line in)
-
-# Statistics
-Linear regression and checking for temporal and spatial serial dependence
-
-
-
-rts package -> time series analysis for raster stack
-maybe only use ts()
-```{r}
-rt <- rts(stack, date)
-plot(rt)
-# add time variable to the raster STACK? via https://gis.stackexchange.com/questions/431997/r-terra-write-multiple-time-series-variables-to-netcdf
-```
-
-
-
-
-
-
-
-
-
-# Extra that I don't think I need anymore
-DHW over 4°C
-```{r}
-# how many days with over 4°C heating weeks
-over4dhw <- as.data.frame(stack_four_dhw)
-coords <- crds(stack_four_dhw)
-over4dhw$lon <- coords[,1, drop = FALSE] # add lon from stack to df
-over4dhw$lat <- coords[,2, drop = FALSE] # add lat from stack to df
-```
-
-```{r}
-# fulljoin in dplyr to bind dhw dates and coral dates
-# then filter out the NAs because coral cover does not occur every year
-
-# xts library for plotting -> xts()
-library(xts)
-timeser <- xts(corals$log_cpue, order.by = corals$sample_date) # some locations share the same sample date
-corals$report_year <- as.Date.numeric("%Y%") # not working
-library(dygraphs)
-dygraph(timeser)
-```
-
-
-
-
