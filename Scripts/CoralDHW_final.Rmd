@@ -21,6 +21,7 @@ library(here)
 library(gganimate)
 library(tibble)
 library(plotly) # for interactive map
+library(zoo)
 ```
 
 # Load the DHW data
@@ -388,13 +389,28 @@ p <- ggplot(mean_dhw_df, aes(x, y)) +
       theme_classic()
  ggplotly(p)
 
-
+?transition_states
+ 
 # Animation
+
+for (i in 3:32){
+  print(ggplot(mean_dhw_df, aes(x, y)) +
+    geom_raster(aes(fill = mean_dhw_df[,i, drop = TRUE])) +
+    geom_point(data = northGBR, aes(lon, lat), color = "#CCCCCC", size = 0.3) +
+    geom_point(data = centralGBR, aes(lon, lat), color = "#999999", size = 0.3) +
+    geom_point(data = southGBR, aes(lon, lat), color = "#666666", size = 0.3) +  
+    scale_fill_viridis_c(option = "inferno") +
+    coord_quickmap() +
+    labs(fill = "Mean DHWs [°C]") +
+    ggtitle(labelz[i-2]) +
+    xlab("Longitude°E") +
+    ylab("Latitude°") +
+    theme_classic())
+  #anim_save(p, "animation_mean_dhw.gif", animation = last_animation(), renderer = gifski_renderer())
+}
  
- 
- 
- 
- 
+animate(p, duration = 5, fps = 20, width = 200, height = 200, renderer = gifski_renderer("test.gif"))
+
  
  
  
@@ -568,11 +584,9 @@ ex_credlin_xy <- terra::extract(stack_means, data.frame(s_credlin$lon, s_credlin
 
 ## Rename the columns and turn them into dates to use for the time series
 ```{r}
-
-# I should be able to make a loop to do this, but can't get it right
 extracts_list <- list(ex_macgillivray, ex_boulder, ex_13124S, ex_agincourt, ex_feather, ex_rib, ex_19138S, ex_chinaman, ex_broomfield, ex_credlin)
 
-names(extracts_list) <- c("ex_macgillivray", "ex_boulder", "ex_13124S", "ex_agincourt", "ex_feather", "ex_rib", "ex_19138S","ex_chinaman", "ex_broomfield", "ex_credlin")
+names(extracts_list) <- c("Macgillivray Reef", "Boulder Reef", "13124S", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S","Chinaman Reef", "Broomfield Reef", "Credlin Reefs (east)")
 
 for (i in 1:length(extracts_list)){
   # get rid of first column called ID
@@ -591,7 +605,45 @@ for (i in 1:length(extracts_list)){
 # I now have all the coral sites with year and mean dhw in a list
 ```
 
+# Time Series Analysis
+```{r}
+# zoo time series for mean DHW at all locations
+zoo_list_dhw <- list()
+for (i in 1:length(extracts_list)){
+  name <- paste0(names(extracts_list[i]))
+  zoo_list_dhw[[name]] <- zoo(extracts_list[[i]][,2], order.by = extracts_list[[i]][,1], frequency = 1)
+  plot.zoo(zoo_list_dhw[[name]], ylab = "Mean DHW", xlab = "Years") + title(main = names(zoo_list_dhw[i]))
+}
 
+# zoo time series for log_cpue at all locations
+cpue_list <- list(n_macgillivray, n_boulder, n_13124S, c_agincourt, c_feather, c_rib, c_19138S, s_chinaman, s_broomfield, s_credlin)
+
+names(cpue_list) <- c("Macgillivray Reef", "Boulder Reef", "13124S", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S","Chinaman Reef", "Broomfield Reef", "Credlin Reefs (east)")
+
+zoo_list_cpue <- list()
+cpue_list_ggplot <- list()
+for (i in 1:length(cpue_list)){
+  name <- paste0(names(cpue_list[i]))
+  zoo_list_cpue[[name]] <- zoo(cpue_list[[i]]$log_cpue, order.by = cpue_list[[i]]$sample_date, frequency = 1)
+  #plot.zoo(zoo_list_cpue[[name]], ylab = "Mean DHW", xlab = "Years") + title(main = names(zoo_list_cpue[i]))
+  # convert zoo object into data frame to use ggplot
+  cpue_list_ggplot[[name]] <- fortify(zoo_list_cpue[[i]], melt = FALSE)
+  # rename columns
+  names(cpue_list_ggplot[[i]])[1] <- "years"
+  names(cpue_list_ggplot[[i]])[2] <- "log_cpue"
+  # new column with list name so that I can put data frames together and know where they came from
+  cpue_list_ggplot[[i]]$site <- names(cpue_list_ggplot[i])
+  # for facet_wrapping put all data frames into one
+}
+
+cpue_ts_plots <- do.call(rbind,cpue_list_ggplot)
+
+ggplot(cpue_ts_plots, aes(x = years, y = log_cpue), color = site) +
+  geom_point() +
+  geom_line() +
+  theme_classic() +
+  facet_wrap(~site)
+```
 
 
  
