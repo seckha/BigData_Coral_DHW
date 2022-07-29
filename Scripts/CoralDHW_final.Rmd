@@ -22,6 +22,7 @@ library(gganimate)
 library(tibble)
 library(plotly) # for interactive map
 library(zoo)
+library(forecast) # for cross-correlation
 ```
 
 # Load the DHW data
@@ -63,11 +64,11 @@ GBR_base_ras <-  rast(
   vals=0)
 
 means_list <-  list()
-four_dhw_list <- list()
+# four_dhw_list <- list()
 target_years <-  1992:2021
 for (year in target_years) {
   sum_ras = 0 * GBR_base_ras
-  four_dhw = sum_ras
+  # four_dhw = sum_ras
   # find files where dates are in the southern hemisphere summer starting in the target year
   # start from Dec in target year -> start Dec 1992
   start_date <-  ymd(paste0(year, "1201"))
@@ -76,24 +77,16 @@ for (year in target_years) {
   #  dates in season = dates for 1 summer season (Dec-Feb)
   dates_in_season <-  dates >= start_date & dates < end_date # from Dec 1 till Feb 29
   files_in_season <-  target_files[dates_in_season]
-  #message (head (files_in_season))
 
   for (file in files_in_season) {
-    # terra uses gdal underneath to read the file
-    # and is much faster than fiddling with ncdf4 and raster libs
-    # formatted = sprintf("NETCDF:%s", file)
-    # r = rast(formatted)["degree_heating_week"]
-    
     #  get the component we care about as a terra::rast object 
     r = rast(file)["degree_heating_week"] # degree heating week is a variable in every file containing values
     clipped <- raster::crop(r, GBR_base_ras) # subset of r where just the data from the GBR is used, not the world
     sum_ras <- sum_ras + clipped
-    # message (file)
-    # message (paste (summary (r)))
     
     # take out individual days which have a DHW above 4°C
-    thresh <- clipped >= 4
-    four_dhw <- four_dhw + thresh
+    #thresh <- clipped >= 4
+    #four_dhw <- four_dhw + thresh
     
     gc() # garbage collection
   }
@@ -103,7 +96,7 @@ for (year in target_years) {
   # plot(mean_ras) # plots 30 years (summers) from 1992 - 2021
   # mean DHW per summer per location (1 value per location per year):
   means_list[[as.character(year)]] <- mean_ras
-  four_dhw_list[[as.character(year)]] <- four_dhw
+  #four_dhw_list[[as.character(year)]] <- four_dhw
 }
 ```
 
@@ -111,9 +104,9 @@ for (year in target_years) {
 ```{r, echo = FALSE}
 #  this has all the data and can be drilled into to extract the time series for each location
 stack_means <- rast(means_list) # raster stack
-stack_over4dhw <- rast(four_dhw_list)
+# stack_over4dhw <- rast(four_dhw_list)
 # readValues(stack_means$"1993") # one year/summer has more than one value because there's multiple locations!
-summary(stack_means, maxsamp = ncell(stack_means))
+# summary(stack_means, maxsamp = ncell(stack_means))
 ```
 
 # Load the coral cover data
@@ -359,22 +352,25 @@ ggplot(mean_dhw_df, aes(x, y)) +
   ggtitle("2021") +
   theme_classic()
 
-
 # loop of plots for all the years
 for (i in 3:32){
-  print(ggplot(mean_dhw_df, aes(x, y)) +
+  p <- ggplot(mean_dhw_df, aes(x, y)) +
     geom_raster(aes(fill = mean_dhw_df[,i, drop = TRUE])) +
     geom_point(data = northGBR, aes(lon, lat), color = "#CCCCCC", size = 0.3) +
     geom_point(data = centralGBR, aes(lon, lat), color = "#999999", size = 0.3) +
     geom_point(data = southGBR, aes(lon, lat), color = "#666666", size = 0.3) +  
-    scale_fill_viridis_c(option = "inferno") +
+    scale_fill_viridis_c(option = "inferno", limits = c(0,11)) +
     coord_quickmap() +
-    labs(fill = "Mean DHWs [°C]") +
+    labs(fill = "Mean DHW") +
     ggtitle(labelz[i-2]) +
     xlab("Longitude°E") +
     ylab("Latitude°") +
-    theme_classic())
+    theme_classic() +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+  ggsave(p, filename = paste0(names(mean_dhw_df[i]), ".png"), path = here("Plots"))
 }
+
+# all plots saved and then animate to .gif in photoshop
 
 # interactive map for one year
 p <- ggplot(mean_dhw_df, aes(x, y)) +
@@ -382,39 +378,12 @@ p <- ggplot(mean_dhw_df, aes(x, y)) +
       geom_point(data = corals, aes(lon, lat), color = "grey", size = 0.5) +
       scale_fill_viridis_c(option = "inferno") +
       coord_quickmap() +
-      labs(fill = "Mean DHWs [°C]") +
+      labs(fill = "Mean DHW") +
       ggtitle("2021") +
       xlab("Longitude°E") +
       ylab("Latitude°") +
       theme_classic()
  ggplotly(p)
-
-?transition_states
- 
-# Animation
-
-for (i in 3:32){
-  print(ggplot(mean_dhw_df, aes(x, y)) +
-    geom_raster(aes(fill = mean_dhw_df[,i, drop = TRUE])) +
-    geom_point(data = northGBR, aes(lon, lat), color = "#CCCCCC", size = 0.3) +
-    geom_point(data = centralGBR, aes(lon, lat), color = "#999999", size = 0.3) +
-    geom_point(data = southGBR, aes(lon, lat), color = "#666666", size = 0.3) +  
-    scale_fill_viridis_c(option = "inferno") +
-    coord_quickmap() +
-    labs(fill = "Mean DHWs [°C]") +
-    ggtitle(labelz[i-2]) +
-    xlab("Longitude°E") +
-    ylab("Latitude°") +
-    theme_classic())
-  #anim_save(p, "animation_mean_dhw.gif", animation = last_animation(), renderer = gifski_renderer())
-}
- 
-animate(p, duration = 5, fps = 20, width = 200, height = 200, renderer = gifski_renderer("test.gif"))
-
- 
- 
- 
- 
 ```
 
 
@@ -586,7 +555,7 @@ ex_credlin_xy <- terra::extract(stack_means, data.frame(s_credlin$lon, s_credlin
 ```{r}
 extracts_list <- list(ex_macgillivray, ex_boulder, ex_13124S, ex_agincourt, ex_feather, ex_rib, ex_19138S, ex_chinaman, ex_broomfield, ex_credlin)
 
-names(extracts_list) <- c("Macgillivray Reef", "Boulder Reef", "13124S", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S","Chinaman Reef", "Broomfield Reef", "Credlin Reefs (east)")
+names(extracts_list) <- c("MacGillivray Reef", "Boulder Reef", "13124S", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S","Chinaman Reef", "Broomfield Reef", "Credlin Reefs (east)")
 
 for (i in 1:length(extracts_list)){
   # get rid of first column called ID
@@ -609,16 +578,43 @@ for (i in 1:length(extracts_list)){
 ```{r}
 # zoo time series for mean DHW at all locations
 zoo_list_dhw <- list()
+dhw_list_ggplot <- list()
 for (i in 1:length(extracts_list)){
   name <- paste0(names(extracts_list[i]))
   zoo_list_dhw[[name]] <- zoo(extracts_list[[i]][,2], order.by = extracts_list[[i]][,1], frequency = 1)
-  plot.zoo(zoo_list_dhw[[name]], ylab = "Mean DHW", xlab = "Years") + title(main = names(zoo_list_dhw[i]))
+  #plot.zoo(zoo_list_dhw[[name]], ylab = "Mean DHW", xlab = "Years") + title(main = names(zoo_list_dhw[i]))
+  dhw_list_ggplot[[name]] <- fortify(zoo_list_dhw[[i]], melt = FALSE)
+  # rename columns
+  names(dhw_list_ggplot[[i]])[1] <- "years"
+  names(dhw_list_ggplot[[i]])[2] <- "mean_dhw"
+  # new column with list name so that I can put data frames together and know where they came from
+  dhw_list_ggplot[[i]]$site <- names(dhw_list_ggplot[i])
 }
+
+# for facet_wrapping put all data frames into one
+dhw_ts_plots <- do.call(rbind,dhw_list_ggplot)
+
+p <- ggplot(dhw_ts_plots, aes(x = years, y = mean_dhw, color = factor(site, levels = c("13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")))) +
+  geom_point() +
+  geom_line() +
+  ylab("Mean DHW") +
+  xlab("Years") +
+  theme_classic() +
+  theme(legend.position = "none") +
+  facet_wrap(~factor(site, levels = c("13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")), ncol = 1, scales = "free_y") +
+  scale_color_viridis_d(option = "viridis") +
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y")
+
+ggsave(p, filename = here("Plots/dhw_ts_all_locations.png"), height = 45, width = 30, units = "cm", scale = 0.7)
+
+
+
+
 
 # zoo time series for log_cpue at all locations
 cpue_list <- list(n_macgillivray, n_boulder, n_13124S, c_agincourt, c_feather, c_rib, c_19138S, s_chinaman, s_broomfield, s_credlin)
 
-names(cpue_list) <- c("Macgillivray Reef", "Boulder Reef", "13124S", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S","Chinaman Reef", "Broomfield Reef", "Credlin Reefs (east)")
+names(cpue_list) <- c("MacGillivray Reef", "Boulder Reef", "13124S", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S","Chinaman Reef", "Broomfield Reef", "Credlin Reefs (east)")
 
 zoo_list_cpue <- list()
 cpue_list_ggplot <- list()
@@ -633,22 +629,100 @@ for (i in 1:length(cpue_list)){
   names(cpue_list_ggplot[[i]])[2] <- "log_cpue"
   # new column with list name so that I can put data frames together and know where they came from
   cpue_list_ggplot[[i]]$site <- names(cpue_list_ggplot[i])
-  # for facet_wrapping put all data frames into one
 }
 
+# for facet_wrapping put all data frames into one
 cpue_ts_plots <- do.call(rbind,cpue_list_ggplot)
 
-ggplot(cpue_ts_plots, aes(x = years, y = log_cpue, color = factor(site, levels = c( "13124S", "Macgillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")))) +
+p <- ggplot(cpue_ts_plots, aes(x = years, y = log_cpue, color = factor(site, levels = c( "13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")))) +
   geom_point() +
   geom_line() +
   ylab("Log(Mean Cover per Unit Effort)") +
   xlab("Years") +
   theme_classic() +
   theme(legend.position = "none") +
-  facet_wrap(~factor(site, levels = c( "13124S", "Macgillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")), ncol = 1) +
-  scale_color_viridis_d(option = "magma") +
-  scale_x_date(date_breaks = "1 year")
+  facet_wrap(~factor(site, levels = c( "13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")), ncol = 1, scales = "free_y") +
+  scale_color_viridis_d(option = "viridis") +
+  scale_x_datetime(date_breaks = "2 years", date_labels = "%Y")
+
+ggsave(p, filename = here("Plots/cpue_ts_all_locations.png"), height = 45, width = 30, units = "cm", scale = 0.7)
+```
+
+# Cross-correlation
+Through cross-correlation, you can figure out if there's a lagged correlation between two time series. Cross-correlation can tell you if values of one time series are predictive of the future values of another, i.e. is one time series an indicator for another.
+
+The lag refers to how far the series are offset, and its sign determines which series is shifted.
+lag of 2:
+  ABCDEFGHIJKLMNOPQRSTUVWXYZ
+abcdefghijklmnopqrstuvwxyz
+lag of -2:
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+  abcdefghijklmnopqrstuvwxyz
+```{r}
+# zoo_list_dhw contains the time series object for dhw at each location
+# zoo_list_cpue contains the time series object for coral cover at each location
+
+# if the vertical lines go over the horizontal dashed line, it's significant
+d <- coredata(zoo_list_dhw$`MacGillivray Reef`)
+c <- coredata(zoo_list_cpue$`MacGillivray Reef`)
+ccf(d, c, main = "DHW vs. CPUE") # non significant
+
+d <- coredata(zoo_list_dhw$`Boulder Reef`)
+c <- coredata(zoo_list_cpue$`Boulder Reef`)
+print(ccf(d, c, main = "DHW vs. CPUE"))
+# significant at -7 with 0.538
+# this means that the cover data lags 7 years after the dhw data
+
+d <- coredata(zoo_list_dhw$`13124S`)
+c <- coredata(zoo_list_cpue$`13124S`)
+ccf(d, c, main = "DHW vs. CPUE") # non significant
+
+d <- coredata(zoo_list_dhw$`Agincourt Reefs (No 1)`)
+c <- coredata(zoo_list_cpue$`Agincourt Reefs (No 1)`)
+ccf(d, c, main = "DHW vs. CPUE") # non significant
+
+d <- coredata(zoo_list_dhw$`Feather Reef`)
+c <- coredata(zoo_list_cpue$`Feather Reef`)
+ccf(d, c, main = "DHW vs. CPUE") # non significant
+
+d <- coredata(zoo_list_dhw$`Rib Reef`)
+c <- coredata(zoo_list_cpue$`Rib Reef`)
+ccf(d, c, main = "DHW vs. CPUE") # non significant
+
+d <- coredata(zoo_list_dhw$`19138S`)
+c <- coredata(zoo_list_cpue$`19138S`)
+ccf(d, c, main = "DHW vs. CPUE") # non significant
+
+d <- coredata(zoo_list_dhw$`Chinaman Reef`)
+c <- coredata(zoo_list_cpue$`Chinaman Reef`)
+ccf(d, c, main = "DHW vs. CPUE") # non significant
+
+d <- coredata(zoo_list_dhw$`Broomfield Reef`)
+c <- coredata(zoo_list_cpue$`Broomfield Reef`)
+ccf(d, c, main = "DHW vs. CPUE") # non significant
+
+d <- coredata(zoo_list_dhw$`Credlin Reefs (east)`)
+c <- coredata(zoo_list_cpue$`Credlin Reefs (east)`)
+ccf(d, c, main = "DHW vs. CPUE") # non significant
+
+# the correlation at lag 0 is the simple correlation between the two, get it by:
+# the two ts object don't have the 
+cor(d,c)
 ```
 
 
+
+# Test the time series for autocorrelation
+```{r}
+# test for autocorrelation
+# use Moran's I for spatial autocorrelation (on dhw data)
+# use xx for temporal autocorrelation (on coral cover data)
+
+```
+
+ 
+ 
+ 
+ 
+ 
  
