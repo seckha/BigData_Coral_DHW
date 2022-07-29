@@ -638,11 +638,16 @@ for (i in 1:length(cpue_list)){
 
 cpue_ts_plots <- do.call(rbind,cpue_list_ggplot)
 
-ggplot(cpue_ts_plots, aes(x = years, y = log_cpue), color = site) +
+ggplot(cpue_ts_plots, aes(x = years, y = log_cpue, color = factor(site, levels = c( "13124S", "Macgillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")))) +
   geom_point() +
   geom_line() +
+  ylab("Log(Mean Cover per Unit Effort)") +
+  xlab("Years") +
   theme_classic() +
-  facet_wrap(~site)
+  theme(legend.position = "none") +
+  facet_wrap(~factor(site, levels = c( "13124S", "Macgillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")), ncol = 1) +
+  scale_color_viridis_d(option = "magma") +
+  scale_x_date(date_breaks = "1 year")
 ```
 
 
