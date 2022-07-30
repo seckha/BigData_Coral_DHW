@@ -121,6 +121,9 @@ corals <- read_excel("/Users/Shannon/OneDrive/A - UNSW/T2 2022/BEES9041/BigData_
 # log transform because both variables skewed and +1 because of zeros
 corals <- mutate(corals, log_cpue = log10((mean_live_coral / tows)+1))
 corals <- mutate(corals, log_dpue = log10((mean_dead_coral / tows)+1))
+
+corals <- mutate(corals, log_cots_pertow = log10((mean_cots_per_tow /tows)+1))
+corals <- mutate(corals, log_trout_pertow = log10((mean_trout_per_tow /tows)+1))
 ```
 
 # Summarize data into Northern, Central, and Southern GBR
@@ -159,7 +162,7 @@ northGBR <- rbind(cg, cl, pc, ts)
 # not using variable report_year because that is the year the report was issued not the year it was sampled
 mean_northGBR <- northGBR %>%
     group_by(sample_year = floor_date(sample_date, "year")) %>%
-    summarize(mean_north = mean(log_cpue))
+    summarize(mean_north = mean(log_cpue), mean_cots = mean(log_cots_pertow))
 
 meandead_northGBR <- northGBR %>%
     group_by(sample_year = floor_date(sample_date, "year")) %>%
@@ -175,7 +178,7 @@ centralGBR <- rbind(ca, cu, in_, to, wh)
 
 mean_centralGBR <- centralGBR %>%
     group_by(sample_year = floor_date(sample_date, "year")) %>%
-    summarize(mean_central = mean(log_cpue))
+    summarize(mean_central = mean(log_cpue), mean_cots = mean(log_cots_pertow))
 
 meandead_centralGBR <- centralGBR %>%
     group_by(sample_year = floor_date(sample_date, "year")) %>%
@@ -189,7 +192,7 @@ southGBR <- rbind(cb, po, sw)
 
 mean_southGBR <- southGBR %>%
     group_by(sample_year = floor_date(sample_date, "year")) %>%
-    summarize(mean_south = mean(log_cpue))
+    summarize(mean_south = mean(log_cpue), mean_cots = mean(log_cots_pertow))
 
 meandead_southGBR <- southGBR %>%
     group_by(sample_year = floor_date(sample_date, "year")) %>%
@@ -506,6 +509,30 @@ unique(south_select$reef_name)
 s_chinaman <- filter(south_select, reef_name == "CHINAMAN REEF(22102)")
 s_broomfield <- filter(south_select, reef_name == "BROOMFIELD REEF")
 s_credlin <- filter(south_select, reef_name == "CREDLIN REEFS (EAST)")
+
+world <- map_data("world")
+
+
+p <- ggplot() +
+  geom_map(data = world, map = world, aes(long, lat, map_id = region), color = "black", fill = "lightgrey", size = 0.1) +
+  geom_point(data = n_13124S, aes(x = lon, y = lat), size = 1.2, color = "#440154FF") +
+  geom_point(data = n_macgillivray, aes(x = lon, y = lat), size = 1.2, color = "#482677FF") + 
+  geom_point(data = n_boulder, aes(x = lon, y = lat), size = 1.2, color = "#404788FF") + 
+  geom_point(data = c_agincourt, aes(x = lon, y = lat), size = 1.2, color = "#404788FF") + 
+  geom_point(data = c_feather, aes(x = lon, y = lat), size = 1.2, color = "#2D708EFF") + 
+  geom_point(data = c_rib, aes(x = lon, y = lat), size = 1.2, color = "#238A8DFF") + 
+  geom_point(data = c_19138S, aes(x = lon, y = lat), size = 1.2, color = "#20A387FF") +
+  geom_point(data = s_credlin, aes(x = lon, y = lat), size = 1.2, color = "#55C667FF") + 
+  geom_point(data = s_chinaman, aes(x = lon, y = lat), size = 1.2, color = "#B8DE29FF") + 
+  geom_point(data = s_broomfield, aes(x = lon, y = lat), size = 1.2, color = "#FDE725FF") + 
+  coord_quickmap() +
+  theme_classic() +
+  xlab("Longitude°E") +
+  ylab("Latitude°") +
+  xlim(140, 155) +
+  ylim(-30, -9)
+
+ggsave(p, filename = here("Plots/10_locations_map.png"))
 ```
 
 # Link mean DHW and coral data
@@ -595,17 +622,18 @@ for (i in 1:length(extracts_list)){
 dhw_ts_plots <- do.call(rbind,dhw_list_ggplot)
 
 p <- ggplot(dhw_ts_plots, aes(x = years, y = mean_dhw, color = factor(site, levels = c("13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")))) +
-  geom_point() +
+  geom_point(size = 0.7, alpha = 0.6) +
   geom_line() +
   ylab("Mean DHW") +
   xlab("Years") +
   theme_classic() +
-  theme(legend.position = "none") +
+  ggtitle("Mean Degree Heating Week (DHW) at each location") +
+  theme(legend.position = "none", strip.text = element_text(size=12, face = "bold"), axis.title = element_text(size = 14, face = "bold"), plot.title = element_text(hjust = 0.5, face = "bold")) +
   facet_wrap(~factor(site, levels = c("13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")), ncol = 1, scales = "free_y") +
   scale_color_viridis_d(option = "viridis") +
   scale_x_date(date_breaks = "2 years", date_labels = "%Y")
 
-ggsave(p, filename = here("Plots/dhw_ts_all_locations.png"), height = 45, width = 30, units = "cm", scale = 0.7)
+ggsave(p, filename = here("Plots/dhw_ts_all_locations.png"), height = 50, width = 30, units = "cm", scale = 0.7)
 
 
 
@@ -635,18 +663,59 @@ for (i in 1:length(cpue_list)){
 cpue_ts_plots <- do.call(rbind,cpue_list_ggplot)
 
 p <- ggplot(cpue_ts_plots, aes(x = years, y = log_cpue, color = factor(site, levels = c( "13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")))) +
-  geom_point() +
+  geom_point(size = 0.7, alpha = 0.6) +
   geom_line() +
   ylab("Log(Mean Cover per Unit Effort)") +
   xlab("Years") +
+  ggtitle("Mean cover per unit effort at each location") +
   theme_classic() +
-  theme(legend.position = "none") +
+  theme(legend.position = "none", strip.text = element_text(size=12, face = "bold"), axis.title = element_text(size = 14, face = "bold"), plot.title = element_text(hjust = 0.5, face = "bold")) +
   facet_wrap(~factor(site, levels = c( "13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")), ncol = 1, scales = "free_y") +
   scale_color_viridis_d(option = "viridis") +
   scale_x_datetime(date_breaks = "2 years", date_labels = "%Y")
 
-ggsave(p, filename = here("Plots/cpue_ts_all_locations.png"), height = 45, width = 30, units = "cm", scale = 0.7)
+ggsave(p, filename = here("Plots/cpue_ts_all_locations.png"), height = 50, width = 30, units = "cm", scale = 0.7)
+
 ```
+
+# Combine the two ts_plots dataframes and rename them for linear regression and for plotting together
+```{r}
+# round up or down to years to make it match with dhw_ts_plots
+cpue_ts_plots$years <- round_date(cpue_ts_plots$years, "years")
+
+# bind rows together of cpue_ts_plots and dhw_ts_plots
+# less dates in cpue_ts_plots -> left_join to match all the dates from dhw to the ones from cpue
+dhw_cpue <- left_join(cpue_ts_plots, dhw_ts_plots)
+
+# plot log_cpue and mean_dhw on top of each other
+# how to get scale right? and secondary axis?
+lims <- as.POSIXct(strptime(c("1993-01-01", "2021-01-02"), 
+                   format = "%Y-%m-%d"))
+p <- ggplot(dhw_cpue, aes(x = years, color = factor(site, levels = c( "13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")))) +
+  geom_line(aes(y = log_cpue))+
+  geom_line(aes(y = mean_dhw), color = "red") +
+  ylab("Log(Mean Cover per Unit Effort)") +
+  xlab("Years") +
+  facet_wrap(~factor(site, levels = c( "13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")), ncol = 1, scales = "free_y") +
+  scale_color_viridis_d(option = "viridis") +
+  theme_classic() +
+  theme(legend.position = "none") +
+  scale_x_datetime(date_breaks = "2 years", date_labels = "%Y", limits = lims)
+  #scale_y_continuous(
+    #"Log(Mean Cover per Unit Effort)",
+    #sec.axis = sec_axis(~.*1.457653, "Mean DHW"))
+
+# scale between dhw and cpue -> dhw is ~1.5 times bigger than cpue
+(max(dhw_cpue$mean_dhw) - min(dhw_cpue$mean_dhw))*(max(dhw_cpue$log_cpue) - min(dhw_cpue$log_cpue))
+
+ggsave(p, filename = here("Plots/dhw_cpue.png"), height = 70, width = 30, units = "cm", scale = 0.7)
+
+```
+
+
+
+
+
 
 # Cross-correlation
 Through cross-correlation, you can figure out if there's a lagged correlation between two time series. Cross-correlation can tell you if values of one time series are predictive of the future values of another, i.e. is one time series an indicator for another.
@@ -666,6 +735,8 @@ ABCDEFGHIJKLMNOPQRSTUVWXYZ
 d <- coredata(zoo_list_dhw$`MacGillivray Reef`)
 c <- coredata(zoo_list_cpue$`MacGillivray Reef`)
 ccf(d, c, main = "DHW vs. CPUE") # non significant
+
+acf(c) # dashed lines are 95% confidence interval, if over that line, autocorrelation distinguishable from 0
 
 d <- coredata(zoo_list_dhw$`Boulder Reef`)
 c <- coredata(zoo_list_cpue$`Boulder Reef`)
@@ -703,11 +774,13 @@ ccf(d, c, main = "DHW vs. CPUE") # non significant
 
 d <- coredata(zoo_list_dhw$`Credlin Reefs (east)`)
 c <- coredata(zoo_list_cpue$`Credlin Reefs (east)`)
-ccf(d, c, main = "DHW vs. CPUE") # non significant
+print(ccf(d, c, main = "DHW vs. CPUE")) # non significant
 
 # the correlation at lag 0 is the simple correlation between the two, get it by:
 # the two ts object don't have the 
 cor(d,c)
+
+
 ```
 
 
@@ -720,7 +793,60 @@ cor(d,c)
 
 ```
 
- 
+# COTS and coral trout
+```{r}
+# ! cots not log transformed
+ggplot(n_macgillivray, aes(x = sample_date)) +
+  geom_line(aes(y = mean_cots_per_tow), color = "red") +
+  geom_line(aes(y = log_cpue)) +
+  theme_classic()
+
+ggplot(n_boulder, aes(x = sample_date)) +
+  geom_line(aes(y = mean_cots_per_tow), color = "red") +
+  geom_line(aes(y = log_cpue)) +
+  theme_classic()
+
+ggplot(n_13124S, aes(x = sample_date)) +
+  geom_line(aes(y = mean_cots_per_tow), color = "red") +
+  geom_line(aes(y = log_cpue)) +
+  theme_classic()
+
+ggplot(c_agincourt, aes(x = sample_date)) +
+  geom_line(aes(y = mean_cots_per_tow), color = "red") +
+  geom_line(aes(y = log_cpue)) +
+  theme_classic()
+
+ggplot(c_feather, aes(x = sample_date)) +
+  geom_line(aes(y = log_cots_pertow), color = "red") +
+  geom_line(aes(y = log_cpue)) +
+  theme_classic()
+
+ggplot(c_rib, aes(x = sample_date)) +
+  geom_line(aes(y = log_cots_pertow), color = "red") +
+  geom_line(aes(y = log_cpue)) +
+  theme_classic()
+
+ggplot(c_19138S, aes(x = sample_date)) +
+  geom_line(aes(y = log_cots_pertow), color = "red") +
+  geom_line(aes(y = log_cpue)) +
+  theme_classic()
+
+ggplot(s_chinaman, aes(x = sample_date)) +
+  geom_line(aes(y = log_cots_pertow), color = "red") +
+  geom_line(aes(y = log_cpue)) +
+  theme_classic()
+
+ggplot(s_credlin, aes(x = sample_date)) +
+  geom_line(aes(y = log_cots_pertow), color = "red") +
+  geom_line(aes(y = log_cpue)) +
+  theme_classic()
+
+ggplot(s_broomfield, aes(x = sample_date)) +
+  geom_line(aes(y = log_cots_pertow), color = "red") +
+  geom_line(aes(y = log_cpue)) +
+  theme_classic() # no cots recorded at all
+```
+
  
  
  
