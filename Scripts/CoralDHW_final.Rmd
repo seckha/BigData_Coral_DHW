@@ -709,23 +709,17 @@ p <- ggplot(dhw_cpue, aes(x = years, color = factor(site, levels = c( "13124S", 
   facet_wrap(~factor(site, levels = c( "13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")), ncol = 2, scales = "free_y") +
   scale_color_viridis_d(option = "viridis") +
   theme_classic() +
-  ggtitle("Time Series Mean DHW and Cover per Unit Effort") +
-  theme(legend.position = "none", strip.text = element_text(size=12, face = "bold"), axis.title = element_text(size = 14, face = "bold"), plot.title = element_text(hjust = 0.5, face = "bold")) +
-  scale_x_datetime(date_breaks = "2 years", date_labels = "%Y", limits = lims)
+  ggtitle("Time Series - Mean DHW and Cover per Unit Effort") +
+  theme(legend.position = "none", strip.text = element_text(size=12, face = "bold"), axis.title = element_text(size = 14, face = "bold"), plot.title = element_text(hjust = 0.5, face = "bold", size = 15)) +
+  scale_x_datetime(date_breaks = "2 years", date_labels = "%Y", limits = lims) +
   scale_y_continuous(
-    sec.axis = sec_axis(~.*0.3001474, name = "Log(Mean DHW)"))
+    sec.axis = sec_axis(~.*0.3, name = expression(bold(Log(Mean~DHW)[red])))) +
 
 # scale between dhw and cpue -> dhw is ~1.5 times bigger than cpue
 (max(dhw_cpue$log_mean_dhw) - min(dhw_cpue$log_mean_dhw))*(max(dhw_cpue$log_cpue) - min(dhw_cpue$log_cpue))
 
 ggsave(p, filename = here("Plots/dhw_cpue.png"), height = 70, width = 60, units = "cm", scale = 0.5)
-
 ```
-
-
-
-
-
 
 # Cross-correlation
 Through cross-correlation, you can figure out if there's a lagged correlation between two time series. Cross-correlation can tell you if values of one time series are predictive of the future values of another, i.e. is one time series an indicator for another.
@@ -788,22 +782,6 @@ ccf(d, c, main = "DHW vs. CPUE") # non significant
 d <- coredata(zoo_list_dhw$`Credlin Reefs (east)`)
 c <- coredata(zoo_list_cpue$`Credlin Reefs (east)`)
 print(ccf(d, c, main = "DHW vs. CPUE")) # non significant
-
-# the correlation at lag 0 is the simple correlation between the two, get it by:
-# the two ts object don't have the 
-cor(d,c)
-
-```
-
-
-
-# Test the time series for autocorrelation
-```{r}
-# test for autocorrelation
-# use Moran's I for spatial autocorrelation (on dhw data)
-# use xx for temporal autocorrelation (on coral cover data)
-
-
 
 ```
 
@@ -891,17 +869,20 @@ summary(mac_modelcorho)
 
 
 
+
 lm_bou <- filter(dhw_cpue, site == "Boulder Reef")
 m_bou <- lm(log_cpue ~ log_mean_dhw, data = lm_bou)
 summary(m_bou)
-autoplot(m_bou)
 dwtest(m_bou) # no autocorrelation
+cor(lm_bou$log_cpue, lm_bou$log_mean_dhw)
+
 
 lm_13 <- filter(dhw_cpue, site == "13124S")
 m_13 <- lm(log_cpue ~ log_mean_dhw, data = lm_13)
 summary(m_13)
 autoplot(m_13)
 dwtest(m_13) # no autocorrelation
+cor(lm_13$log_cpue, lm_13$log_mean_dhw)
 
 # CENTRAL ---------------------------------------------------------
 lm_agi <- filter(dhw_cpue, site == "Agincourt Reefs (No 1)")
@@ -919,6 +900,8 @@ agi_modelcorho<- lm(y.trans~x.trans)
 dwtest(agi_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
 summary(agi_modelcorho)
 
+cor(lm_agi$log_cpue, lm_agi$log_mean_dhw)
+
 
 lm_fea <- filter(dhw_cpue, site == "Feather Reef")
 m_fea <- lm(log_cpue ~ log_mean_dhw, data = lm_fea)
@@ -934,6 +917,8 @@ fea_modelcorho<- lm(y.trans~x.trans)
 dwtest(fea_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
 summary(fea_modelcorho)
 
+cor(lm_fea$log_cpue, lm_fea$log_mean_dhw)
+
 lm_rib <- filter(dhw_cpue, site == "Rib Reef")
 m_rib <- lm(log_cpue ~ log_mean_dhw, data = lm_rib)
 summary(m_rib)
@@ -948,10 +933,14 @@ rib_modelcorho<- lm(y.trans~x.trans)
 dwtest(rib_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
 summary(rib_modelcorho)
 
+cor(lm_rib$log_cpue, lm_rib$log_mean_dhw)
+
 lm_19 <- filter(dhw_cpue, site == "19138S")
 m_19 <- lm(log_cpue ~ log_mean_dhw, data = lm_19)
 summary(m_19)
 dwtest(m_19) # no autocorrelation
+
+cor(lm_19$log_cpue, lm_19$log_mean_dhw)
 
 # SOUTH ---------------------------------------------------------
 lm_cre <- filter(dhw_cpue, site == "Credlin Reefs (east)")
@@ -968,6 +957,8 @@ cre_modelcorho<- lm(y.trans~x.trans)
 dwtest(cre_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
 summary(cre_modelcorho)
 
+cor(lm_cre$log_cpue, lm_cre$log_mean_dhw)
+
 lm_chi <- filter(dhw_cpue, site == "Chinaman Reef")
 m_chi <- lm(log_cpue ~ log_mean_dhw, data = lm_chi)
 summary(m_chi)
@@ -983,10 +974,13 @@ chi_modelcorho<- lm(y.trans~x.trans)
 dwtest(chi_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
 summary(chi_modelcorho)
 
+cor(lm_chi$log_cpue, lm_chi$log_mean_dhw)
+
 lm_bro <- filter(dhw_cpue, site == "Broomfield Reef")
 m_bro <- lm(log_cpue ~ log_mean_dhw, data = lm_bro)
 summary(m_bro)
 dwtest(m_bro) # autocorrelation
+
 
 m_bro_co <- cochrane.orcutt(m_bro)
 rho<- m_bro_co$rho
@@ -994,9 +988,12 @@ y.trans<- lm_bro$log_cpue[-1]-lm_bro$log_cpue[-27]*rho # new log_cpue
 x.trans<- lm_bro$log_mean_dhw[-1]-lm_bro$log_mean_dhw[-27]*rho # new log_mean_dhw
 bro_modelcorho<- lm(y.trans~x.trans)
 
+
 # now Durbin-Watson test again
 dwtest(bro_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
 summary(bro_modelcorho)
+
+cor(lm_bro$log_cpue, lm_bro$log_mean_dhw)
 ```
 
  
