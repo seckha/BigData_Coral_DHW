@@ -18,11 +18,13 @@ library(raster)
 library(tidyverse)
 library(readxl)
 library(here)
-library(gganimate)
 library(tibble)
 library(plotly) # for interactive map
-library(zoo)
+library(zoo) # for time series object with non-regular intervals
 library(forecast) # for cross-correlation
+library(ggfortify) # for autoplot
+library(lmtest) # for Durbin-Watson test
+library(orcutt) # to account for autocorrelation
 ```
 
 # Load the DHW data
@@ -121,6 +123,9 @@ corals <- read_excel("/Users/Shannon/OneDrive/A - UNSW/T2 2022/BEES9041/BigData_
 # log transform because both variables skewed and +1 because of zeros
 corals <- mutate(corals, log_cpue = log10((mean_live_coral / tows)+1))
 corals <- mutate(corals, log_dpue = log10((mean_dead_coral / tows)+1))
+corals <- mutate(corals, cpue = mean_live_coral/tows)
+corals <- mutate(corals, dpue = mean_dead_coral/tows)
+
 
 corals <- mutate(corals, log_cots_pertow = log10((mean_cots_per_tow /tows)+1))
 corals <- mutate(corals, log_trout_pertow = log10((mean_trout_per_tow /tows)+1))
@@ -161,13 +166,19 @@ northGBR <- rbind(cg, cl, pc, ts)
 # use floor_date from lubridate package to round down to the year of the sample date
 # not using variable report_year because that is the year the report was issued not the year it was sampled
 mean_northGBR <- northGBR %>%
-    group_by(sample_year = floor_date(sample_date, "year")) %>%
-    summarize(mean_north = mean(log_cpue), mean_cots = mean(log_cots_pertow))
+    group_by(sample_year = round_date(sample_date, "year")) %>%
+    summarize(mean_cpue = mean(cpue), 
+              mean_cots = mean(mean_cots_per_tow),
+              mean_trout = mean(mean_trout_per_tow),
+              mean_dpue = mean(dpue))
 
-meandead_northGBR <- northGBR %>%
-    group_by(sample_year = floor_date(sample_date, "year")) %>%
-    summarize(meandead_north = mean(log_dpue))
-
+ggplot(mean_northGBR, aes(x = sample_year)) +
+  geom_line(aes(y= mean_cpue)) +
+  geom_line(aes(y = mean_cots), color = "red") +
+  geom_line(aes(y = mean_trout), color = "blue") +
+  geom_line(aes(y = mean_dpue), color = "orange") +
+  theme_classic()
+  
 # CENTRAL ------------------------------------------
 ca <- filter(corals, sector == "CA")
 cu <- filter(corals, sector == "CU")
@@ -177,12 +188,18 @@ wh <- filter(corals, sector == "WH")
 centralGBR <- rbind(ca, cu, in_, to, wh)
 
 mean_centralGBR <- centralGBR %>%
-    group_by(sample_year = floor_date(sample_date, "year")) %>%
-    summarize(mean_central = mean(log_cpue), mean_cots = mean(log_cots_pertow))
+    group_by(sample_year = round_date(sample_date, "year")) %>%
+    summarize(mean_cpue = mean(cpue), 
+              mean_cots = mean(mean_cots_per_tow),
+              mean_trout = mean(mean_trout_per_tow),
+              mean_dpue= mean(dpue))
 
-meandead_centralGBR <- centralGBR %>%
-    group_by(sample_year = floor_date(sample_date, "year")) %>%
-    summarize(meandead_central = mean(log_dpue))
+ggplot(mean_centralGBR, aes(x = sample_year)) +
+  geom_line(aes(y= mean_cpue)) +
+  geom_line(aes(y = mean_cots), color = "red") +
+  geom_line(aes(y = mean_trout), color = "blue") +
+  geom_line(aes(y = mean_dpue), color = "orange") +
+  theme_classic()
 
 # SOUTH ------------------------------------------
 cb <- filter(corals, sector == "CB")
@@ -191,35 +208,27 @@ sw <- filter(corals, sector == "SW")
 southGBR <- rbind(cb, po, sw)
 
 mean_southGBR <- southGBR %>%
-    group_by(sample_year = floor_date(sample_date, "year")) %>%
-    summarize(mean_south = mean(log_cpue), mean_cots = mean(log_cots_pertow))
+    group_by(sample_year = round_date(sample_date, "year")) %>%
+    summarize(mean_cpue = mean(cpue), 
+              mean_cots = mean(mean_cots_per_tow),
+              mean_trout = mean(mean_trout_per_tow),
+              mean_dpue = mean(dpue))
 
-meandead_southGBR <- southGBR %>%
-    group_by(sample_year = floor_date(sample_date, "year")) %>%
-    summarize(meandead_south = mean(log_dpue))
+ggplot(mean_southGBR, aes(x = sample_year)) +
+  geom_line(aes(y= mean_cpue)) +
+  geom_line(aes(y = mean_cots), color = "red") +
+  geom_line(aes(y = mean_trout), color = "blue") +
+  geom_line(aes(y = mean_dpue), color = "orange") +
+  theme_classic()
 
-# mean coral cover
-ggplot() +
-  geom_point(data = mean_northGBR, aes(x = sample_year, y = mean_north), color = "red") +
-  geom_line(data = mean_northGBR, aes(x = sample_year, y = mean_north), color = "red") +
-  geom_point(data = mean_centralGBR, aes(x = sample_year, y = mean_central), color = "green") +
-  geom_line(data = mean_centralGBR, aes(x = sample_year, y = mean_central), color = "green") +
-  geom_point(data = mean_southGBR, aes(x = sample_year, y = mean_south), color = "blue") +
-  geom_line(data = mean_southGBR, aes(x = sample_year, y = mean_south), color = "blue") +
+# ALL GBR -------------------------------------------
+ggplot(NULL, aes(x = sample_year, y = mean_cpue)) +
+  geom_line(data = mean_northGBR, color = "red") +
+  geom_line(data = mean_centralGBR, color = "green") +
+  geom_line(data = mean_southGBR, color = "blue") +
   theme_classic() +
-  ylab("Log(Mean Cover per Unit Effort)")
+  ylab("Mean Cover per Unit Effort")
 
-# mean dead coral cover
-ggplot() +
-  geom_point(data = meandead_northGBR, aes(x = sample_year, y = meandead_north), color = "red") +
-  geom_line(data = meandead_northGBR, aes(x = sample_year, y = meandead_north), color = "red") +
-  geom_point(data = meandead_centralGBR, aes(x = sample_year, y = meandead_central), color = "green") +
-  geom_line(data = meandead_centralGBR, aes(x = sample_year, y = meandead_central), color = "green") +
-  geom_point(data = meandead_southGBR, aes(x = sample_year, y = meandead_south), color = "blue") +
-  geom_line(data = meandead_southGBR, aes(x = sample_year, y = meandead_south), color = "blue") +
-  theme_classic() +
-  ylab("Log(Mean Dead Cover per Unit Effort)")
-# dead cover might not equal bleached cover because bleached ≠ dead
 ```
 
 ## Mean cover of the individual 12 sectors
@@ -228,112 +237,110 @@ This is a more accurate representation of coral cover, as the cover for many sec
 # Calculating the mean coral cover per unit effort for each sector ------------------------------
 # Cape Grenville
 mean_cg <- cg %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Cooktown-Lizard Island
 mean_cl <-  cl %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Princess Charlotte Bay
 mean_pc <-  pc %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Torres Strait -> only one observation in 2021
 mean_ts <-  ts %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Cairns
 mean_ca <-  ca %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Cape Upstart
 mean_cu <-  cu %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Innisfail
 mean_in <-  in_ %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Townsville
 mean_to <-  to %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Whitsundays
 mean_wh <-  wh %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Capricorn-Bunker
 mean_cb <-  cb %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Pompey
 mean_po <-  po %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Swain
 mean_sw <-  sw %>%
-  group_by(sample_year = floor_date(sample_date, "year")) %>%
-  summarize(mean_cover = mean(log_cpue))
+  group_by(sample_year = round_date(sample_date, "year")) %>%
+  summarize(mean_cpue = mean(cpue))
 
 # Plot all of the sectors ------------------------------------------------------------------------------
 # there are df where there's not continuous values from 1992-2021 because there were no manta tows for some years
 
 # North sectors
-setNames(list(mean_cg, mean_cl, mean_pc, mean_ts), c("mean_cg", "mean_cl", "mean_pc", "mean_ts")) %>%
+p <- setNames(list(mean_cg, mean_cl, mean_pc, mean_ts), c("mean_cg", "mean_cl", "mean_pc", "mean_ts")) %>%
   map_df(~ .x %>% gather(key, value, -sample_year), .id="source") %>% 
   ggplot(aes(x = sample_year, y = value, colour=source)) +
   geom_line() +
   geom_point(size = 0.75, alpha = 0.5) +
   xlab("Sample Year") +
-  ylab("log(Mean Cover per Unit Effort)") +
+  ylab("Mean Cover per Unit Effort") +
   scale_color_brewer("", labels = c("Cape Grenville", "Cooktown-Lizard Island", "Princess Charlotte Bay", "Torres Strait"), palette = "Set2") +
   ggtitle("North Sectors") +
   theme_classic()
 
-ggsave(filename = here("Plots/north_sectors_mean_cover.pdf"), plot = last_plot(), height = 15, width = 25, units = "cm", scale = 0.7)
+ggsave(p, filename = here("Plots/north_sectors_mean_cover_nolog.png"), height = 15, width = 25, units = "cm", scale = 0.7)
 
 # Central sectors
-setNames(list(mean_ca, mean_cu, mean_in, mean_to, mean_wh), c("mean_ca", "mean_cu", "mean_in", "mean_to", "mean_wh")) %>%
+p <- setNames(list(mean_ca, mean_cu, mean_in, mean_to, mean_wh), c("mean_ca", "mean_cu", "mean_in", "mean_to", "mean_wh")) %>%
   map_df(~ .x %>% gather(key, value, -sample_year), .id="source") %>% 
   ggplot(aes(x = sample_year, y = value, colour=source)) +
   geom_line() +
   geom_point(size = 0.75, alpha = 0.5) +
   xlab("Sample Year") +
-  ylab("log(Mean Cover per Unit Effort)") +
+  ylab("Mean Cover per Unit Effort") +
   scale_color_brewer("", labels = c("Cairns", "Cape Upstart", "Innisfail", "Townsville", "Whitsundays"), palette = "Set2") +
   ggtitle("Central Sectors") +
   theme_classic()
 
-ggsave(filename = here("Plots/central_sectors_mean_cover.pdf"), plot = last_plot(), height = 15, width = 25, units = "cm", scale = 0.7)
+ggsave(p, filename = here("Plots/central_sectors_mean_cover_nolog.png"), height = 15, width = 25, units = "cm", scale = 0.7)
 
 # South sectors
-setNames(list(mean_cb, mean_po, mean_sw), c("mean_cb", "mean_po", "mean_sw")) %>%
+p <- setNames(list(mean_cb, mean_po, mean_sw), c("mean_cb", "mean_po", "mean_sw")) %>%
   map_df(~ .x %>% gather(key, value, -sample_year), .id="source") %>% 
   ggplot(aes(x = sample_year, y = value, colour=source)) +
   geom_line() +
   geom_point(size = 0.75, alpha = 0.5) +
   xlab("Sample Year") +
-  ylab("log(Mean Cover per Unit Effort)") +
+  ylab("Mean Cover per Unit Effort") +
   scale_color_brewer("", labels = c("Capricorn-Bunker", "Pompey", "Swain"), palette = "Set2") +
   ggtitle("South Sectors") +
   theme_classic()
 
-ggsave(filename = here("Plots/south_sectors_mean_cover.pdf"), plot = last_plot(), height = 15, width = 25, units = "cm", scale = 0.7)
+ggsave(p, filename = here("Plots/south_sectors_mean_cover_nolog.png"), height = 15, width = 25, units = "cm", scale = 0.7)
 
 ```
-
- -> color based on how north they are
 
 
 # Plots of the GBR and the mean DHW for each summer 
@@ -343,7 +350,7 @@ ggsave(filename = here("Plots/south_sectors_mean_cover.pdf"), plot = last_plot()
 mean_dhw_df <- as.data.frame(stack_means, xy = TRUE)
 
 # labels for the plot titles
-labelz <- c("1992", "1993","1994", "1995", "1996","1997",  "1998", "1999", "2000", "2001", "2002", "2003", "2004", "2005","2006", "2007","2008", "2009", "2010", "2011",  "2012", "2013","2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021")
+labelz <- c("1992/93", "1993/94","1994/95", "1995/96", "1996/97","1997/98",  "1998/99", "1999/00", "2000/01", "2001/02", "2002/03", "2003/04", "2004/05", "2005/06","2006/07", "2007/08","2008/09", "2009/10", "2010/11", "2011/12",  "2012/13", "2013/14","2014/15", "2015/16", "2016/17", "2017/18", "2018/19", "2019/20", "2020/21", "2021/22")
 
 # mean DHW plots for just one year
 ggplot(mean_dhw_df, aes(x, y)) +
@@ -512,19 +519,19 @@ s_credlin <- filter(south_select, reef_name == "CREDLIN REEFS (EAST)")
 
 world <- map_data("world")
 
-
+# map with all 10 locations
 p <- ggplot() +
   geom_map(data = world, map = world, aes(long, lat, map_id = region), color = "black", fill = "lightgrey", size = 0.1) +
-  geom_point(data = n_13124S, aes(x = lon, y = lat), size = 1.2, color = "#440154FF") +
-  geom_point(data = n_macgillivray, aes(x = lon, y = lat), size = 1.2, color = "#482677FF") + 
-  geom_point(data = n_boulder, aes(x = lon, y = lat), size = 1.2, color = "#404788FF") + 
-  geom_point(data = c_agincourt, aes(x = lon, y = lat), size = 1.2, color = "#404788FF") + 
-  geom_point(data = c_feather, aes(x = lon, y = lat), size = 1.2, color = "#2D708EFF") + 
-  geom_point(data = c_rib, aes(x = lon, y = lat), size = 1.2, color = "#238A8DFF") + 
-  geom_point(data = c_19138S, aes(x = lon, y = lat), size = 1.2, color = "#20A387FF") +
-  geom_point(data = s_credlin, aes(x = lon, y = lat), size = 1.2, color = "#55C667FF") + 
-  geom_point(data = s_chinaman, aes(x = lon, y = lat), size = 1.2, color = "#B8DE29FF") + 
-  geom_point(data = s_broomfield, aes(x = lon, y = lat), size = 1.2, color = "#FDE725FF") + 
+  geom_point(data = n_13124S, aes(x = lon, y = lat), size = 1.5, color = "#440154FF") +
+  geom_point(data = n_macgillivray, aes(x = lon, y = lat), size = 1.5, color = "#482677FF") + 
+  geom_point(data = n_boulder, aes(x = lon, y = lat), size = 1.5, color = "#404788FF") + 
+  geom_point(data = c_agincourt, aes(x = lon, y = lat), size = 1.5, color = "#404788FF") + 
+  geom_point(data = c_feather, aes(x = lon, y = lat), size = 1.5, color = "#2D708EFF") + 
+  geom_point(data = c_rib, aes(x = lon, y = lat), size = 1.5, color = "#238A8DFF") + 
+  geom_point(data = c_19138S, aes(x = lon, y = lat), size = 1.5, color = "#20A387FF") +
+  geom_point(data = s_credlin, aes(x = lon, y = lat), size = 1.5, color = "#55C667FF") + 
+  geom_point(data = s_chinaman, aes(x = lon, y = lat), size = 1.5, color = "#B8DE29FF") + 
+  geom_point(data = s_broomfield, aes(x = lon, y = lat), size = 1.5, color = "#FDE725FF") + 
   coord_quickmap() +
   theme_classic() +
   xlab("Longitude°E") +
@@ -593,15 +600,18 @@ for (i in 1:length(extracts_list)){
   extracts_list[[i]] <- as.data.frame(t(extracts_list[[i]]))
   # turn first row names (years) into a column and call the column "year"
   extracts_list[[i]] <- tibble::rownames_to_column(extracts_list[[i]], "year")
-  # name the second column "mean_dhw"
-  names(extracts_list[[i]])[2] <- "mean_dhw"
   # convert the year <chr> into a date
   extracts_list[[i]][1]$year <- ymd(sprintf("%s-01-01", extracts_list[[i]][1]$year))
+  # log-transform mean_dhw
+  extracts_list[[i]][2] <- log10(extracts_list[[i]][2]+1)
+  # name the second column "log_mean_dhw"
+  names(extracts_list[[i]])[2] <- "log_mean_dhw"
 }
 # I now have all the coral sites with year and mean dhw in a list
 ```
 
 # Time Series Analysis
+Have mean DHW and mean cover per unit effort (cpue) log-transformed for the time series and the statistics.
 ```{r}
 # zoo time series for mean DHW at all locations
 zoo_list_dhw <- list()
@@ -613,7 +623,7 @@ for (i in 1:length(extracts_list)){
   dhw_list_ggplot[[name]] <- fortify(zoo_list_dhw[[i]], melt = FALSE)
   # rename columns
   names(dhw_list_ggplot[[i]])[1] <- "years"
-  names(dhw_list_ggplot[[i]])[2] <- "mean_dhw"
+  names(dhw_list_ggplot[[i]])[2] <- "log_mean_dhw"
   # new column with list name so that I can put data frames together and know where they came from
   dhw_list_ggplot[[i]]$site <- names(dhw_list_ggplot[i])
 }
@@ -621,10 +631,10 @@ for (i in 1:length(extracts_list)){
 # for facet_wrapping put all data frames into one
 dhw_ts_plots <- do.call(rbind,dhw_list_ggplot)
 
-p <- ggplot(dhw_ts_plots, aes(x = years, y = mean_dhw, color = factor(site, levels = c("13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")))) +
+p <- ggplot(dhw_ts_plots, aes(x = years, y = log_mean_dhw, color = factor(site, levels = c("13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")))) +
   geom_point(size = 0.7, alpha = 0.6) +
   geom_line() +
-  ylab("Mean DHW") +
+  ylab("Log(Mean DHW)") +
   xlab("Years") +
   theme_classic() +
   ggtitle("Mean Degree Heating Week (DHW) at each location") +
@@ -633,7 +643,7 @@ p <- ggplot(dhw_ts_plots, aes(x = years, y = mean_dhw, color = factor(site, leve
   scale_color_viridis_d(option = "viridis") +
   scale_x_date(date_breaks = "2 years", date_labels = "%Y")
 
-ggsave(p, filename = here("Plots/dhw_ts_all_locations.png"), height = 50, width = 30, units = "cm", scale = 0.7)
+ggsave(p, filename = here("Plots/log_dhw_ts_all_locations.png"), height = 50, width = 30, units = "cm", scale = 0.7)
 
 
 
@@ -693,22 +703,22 @@ lims <- as.POSIXct(strptime(c("1993-01-01", "2021-01-02"),
                    format = "%Y-%m-%d"))
 p <- ggplot(dhw_cpue, aes(x = years, color = factor(site, levels = c( "13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")))) +
   geom_line(aes(y = log_cpue))+
-  geom_line(aes(y = mean_dhw), color = "red") +
+  geom_line(aes(y = log_mean_dhw), color = "red") +
   ylab("Log(Mean Cover per Unit Effort)") +
   xlab("Years") +
-  facet_wrap(~factor(site, levels = c( "13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")), ncol = 1, scales = "free_y") +
+  facet_wrap(~factor(site, levels = c( "13124S", "MacGillivray Reef", "Boulder Reef", "Agincourt Reefs (No 1)", "Feather Reef", "Rib Reef", "19138S", "Credlin Reefs (east)", "Chinaman Reef", "Broomfield Reef")), ncol = 2, scales = "free_y") +
   scale_color_viridis_d(option = "viridis") +
   theme_classic() +
-  theme(legend.position = "none") +
+  ggtitle("Time Series Mean DHW and Cover per Unit Effort") +
+  theme(legend.position = "none", strip.text = element_text(size=12, face = "bold"), axis.title = element_text(size = 14, face = "bold"), plot.title = element_text(hjust = 0.5, face = "bold")) +
   scale_x_datetime(date_breaks = "2 years", date_labels = "%Y", limits = lims)
-  #scale_y_continuous(
-    #"Log(Mean Cover per Unit Effort)",
-    #sec.axis = sec_axis(~.*1.457653, "Mean DHW"))
+  scale_y_continuous(
+    sec.axis = sec_axis(~.*0.3001474, name = "Log(Mean DHW)"))
 
 # scale between dhw and cpue -> dhw is ~1.5 times bigger than cpue
-(max(dhw_cpue$mean_dhw) - min(dhw_cpue$mean_dhw))*(max(dhw_cpue$log_cpue) - min(dhw_cpue$log_cpue))
+(max(dhw_cpue$log_mean_dhw) - min(dhw_cpue$log_mean_dhw))*(max(dhw_cpue$log_cpue) - min(dhw_cpue$log_cpue))
 
-ggsave(p, filename = here("Plots/dhw_cpue.png"), height = 70, width = 30, units = "cm", scale = 0.7)
+ggsave(p, filename = here("Plots/dhw_cpue.png"), height = 70, width = 60, units = "cm", scale = 0.5)
 
 ```
 
@@ -736,7 +746,10 @@ d <- coredata(zoo_list_dhw$`MacGillivray Reef`)
 c <- coredata(zoo_list_cpue$`MacGillivray Reef`)
 ccf(d, c, main = "DHW vs. CPUE") # non significant
 
-acf(c) # dashed lines are 95% confidence interval, if over that line, autocorrelation distinguishable from 0
+# dashed lines are 95% confidence interval, if over that line, autocorrelation distinguishable from 0
+# autocorrelation at lag 0 should be 1 (how does the data correlate with itself? = 1)
+acf(c) # some autocorrelation
+acf(d) 
 
 d <- coredata(zoo_list_dhw$`Boulder Reef`)
 c <- coredata(zoo_list_cpue$`Boulder Reef`)
@@ -780,7 +793,6 @@ print(ccf(d, c, main = "DHW vs. CPUE")) # non significant
 # the two ts object don't have the 
 cor(d,c)
 
-
 ```
 
 
@@ -790,6 +802,8 @@ cor(d,c)
 # test for autocorrelation
 # use Moran's I for spatial autocorrelation (on dhw data)
 # use xx for temporal autocorrelation (on coral cover data)
+
+
 
 ```
 
@@ -847,8 +861,144 @@ ggplot(s_broomfield, aes(x = sample_date)) +
   theme_classic() # no cots recorded at all
 ```
 
- 
- 
+# Linear Model and eliminating autocorrelation
+Durbin-Watson test and Cochrane Orcutt after [RPubs](https://rpubs.com/apricitea/handling-autocorrelation).
+Mean DHW has no significant effect on coral cover in any of the 10 locations.
+```{r}
+# NORTH ---------------------------------------------------------
+lm_mac <- filter(dhw_cpue, site == "MacGillivray Reef")
+cor(lm_mac$log_cpue, lm_mac$log_mean_dhw)
+m_mac <- lm(log_cpue ~ log_mean_dhw, data = lm_mac)
+summary(m_mac)
+autoplot(m_mac)
+acf(m_mac$residuals)
+# Durbin-Watson Test -> autocorrelation does exist as p < 0.05 -> H1: autocorrelation does exist
+dwtest(m_mac)
+
+m_mac_co <- cochrane.orcutt(m_mac)
+# optimum rho is 0.584059
+# now transform the data
+rho<- m_mac_co$rho
+y.trans<- lm_mac$log_cpue[-1]-lm_mac$log_cpue[-25]*rho # new log_cpue
+x.trans<- lm_mac$log_mean_dhw[-1]-lm_mac$log_mean_dhw[-25]*rho # new log_mean_dhw
+mac_modelcorho<- lm(y.trans~x.trans)
+
+# now Durbin-Watson test again
+dwtest(mac_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
+
+# summary of lm again
+summary(mac_modelcorho)
+
+
+
+lm_bou <- filter(dhw_cpue, site == "Boulder Reef")
+m_bou <- lm(log_cpue ~ log_mean_dhw, data = lm_bou)
+summary(m_bou)
+autoplot(m_bou)
+dwtest(m_bou) # no autocorrelation
+
+lm_13 <- filter(dhw_cpue, site == "13124S")
+m_13 <- lm(log_cpue ~ log_mean_dhw, data = lm_13)
+summary(m_13)
+autoplot(m_13)
+dwtest(m_13) # no autocorrelation
+
+# CENTRAL ---------------------------------------------------------
+lm_agi <- filter(dhw_cpue, site == "Agincourt Reefs (No 1)")
+m_agi <- lm(log_cpue ~ log_mean_dhw, data = lm_agi)
+summary(m_agi)
+
+dwtest(m_agi) # autocorrelation
+m_agi_co <- cochrane.orcutt(m_agi)
+rho<- m_agi_co$rho
+y.trans<- lm_agi$log_cpue[-1]-lm_agi$log_cpue[-28]*rho # new log_cpue
+x.trans<- lm_agi$log_mean_dhw[-1]-lm_agi$log_mean_dhw[-28]*rho # new log_mean_dhw
+agi_modelcorho<- lm(y.trans~x.trans)
+
+# now Durbin-Watson test again
+dwtest(agi_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
+summary(agi_modelcorho)
+
+
+lm_fea <- filter(dhw_cpue, site == "Feather Reef")
+m_fea <- lm(log_cpue ~ log_mean_dhw, data = lm_fea)
+summary(m_fea)
+dwtest(m_fea) # autocorrelation
+m_fea_co <- cochrane.orcutt(m_fea)
+rho<- m_fea_co$rho
+y.trans<- lm_fea$log_cpue[-1]-lm_fea$log_cpue[-25]*rho # new log_cpue
+x.trans<- lm_fea$log_mean_dhw[-1]-lm_fea$log_mean_dhw[-25]*rho # new log_mean_dhw
+fea_modelcorho<- lm(y.trans~x.trans)
+
+# now Durbin-Watson test again
+dwtest(fea_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
+summary(fea_modelcorho)
+
+lm_rib <- filter(dhw_cpue, site == "Rib Reef")
+m_rib <- lm(log_cpue ~ log_mean_dhw, data = lm_rib)
+summary(m_rib)
+dwtest(m_rib) # autocorrelation
+m_rib_co <- cochrane.orcutt(m_rib)
+rho<- m_rib_co$rho
+y.trans<- lm_rib$log_cpue[-1]-lm_rib$log_cpue[-28]*rho # new log_cpue
+x.trans<- lm_rib$log_mean_dhw[-1]-lm_rib$log_mean_dhw[-28]*rho # new log_mean_dhw
+rib_modelcorho<- lm(y.trans~x.trans)
+
+# now Durbin-Watson test again
+dwtest(rib_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
+summary(rib_modelcorho)
+
+lm_19 <- filter(dhw_cpue, site == "19138S")
+m_19 <- lm(log_cpue ~ log_mean_dhw, data = lm_19)
+summary(m_19)
+dwtest(m_19) # no autocorrelation
+
+# SOUTH ---------------------------------------------------------
+lm_cre <- filter(dhw_cpue, site == "Credlin Reefs (east)")
+m_cre <- lm(log_cpue ~ log_mean_dhw, data = lm_cre)
+summary(m_cre)
+dwtest(m_cre) # autocorrelation
+m_cre_co <- cochrane.orcutt(m_cre)
+rho<- m_cre_co$rho
+y.trans<- lm_cre$log_cpue[-1]-lm_cre$log_cpue[-21]*rho # new log_cpue
+x.trans<- lm_cre$log_mean_dhw[-1]-lm_cre$log_mean_dhw[-21]*rho # new log_mean_dhw
+cre_modelcorho<- lm(y.trans~x.trans)
+
+# now Durbin-Watson test again
+dwtest(cre_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
+summary(cre_modelcorho)
+
+lm_chi <- filter(dhw_cpue, site == "Chinaman Reef")
+m_chi <- lm(log_cpue ~ log_mean_dhw, data = lm_chi)
+summary(m_chi)
+dwtest(m_chi) # autocorrelation
+
+m_chi_co <- cochrane.orcutt(m_chi)
+rho<- m_chi_co$rho
+y.trans<- lm_chi$log_cpue[-1]-lm_chi$log_cpue[-28]*rho # new log_cpue
+x.trans<- lm_chi$log_mean_dhw[-1]-lm_chi$log_mean_dhw[-28]*rho # new log_mean_dhw
+chi_modelcorho<- lm(y.trans~x.trans)
+
+# now Durbin-Watson test again
+dwtest(chi_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
+summary(chi_modelcorho)
+
+lm_bro <- filter(dhw_cpue, site == "Broomfield Reef")
+m_bro <- lm(log_cpue ~ log_mean_dhw, data = lm_bro)
+summary(m_bro)
+dwtest(m_bro) # autocorrelation
+
+m_bro_co <- cochrane.orcutt(m_bro)
+rho<- m_bro_co$rho
+y.trans<- lm_bro$log_cpue[-1]-lm_bro$log_cpue[-27]*rho # new log_cpue
+x.trans<- lm_bro$log_mean_dhw[-1]-lm_bro$log_mean_dhw[-27]*rho # new log_mean_dhw
+bro_modelcorho<- lm(y.trans~x.trans)
+
+# now Durbin-Watson test again
+dwtest(bro_modelcorho) # p > 0.05 -> H0 true = there is no autocorrelation anymore
+summary(bro_modelcorho)
+```
+
  
  
  
