@@ -4,6 +4,10 @@ author: "Shannon Eckhardt"
 date: '2022-07-12'
 output: html_document
 ---
+
+## NOT THE FILE USED FOR THE BEES9041 REPORT AND ANALYSIS!! GO TO CORALDHW_FINAL.RMD FOR THE CODE
+
+
 # Load libraries
 ```{r, echo = FALSE}
 Sys.setenv(LANG = "en")
@@ -21,7 +25,6 @@ library(gganimate)
 library(tibble)
 library(plotly) # for interactive map
 ```
-## NOT THE FILE USED FOR THE BEES9041 REPORT AND ANALYSIS!! GO TO CORALDHW_FINAL.RMD FOR THE CODE
 
 # Load the DHW data
 There is a DHW file for each day from 1992-2021 that has to be downloaded from the NOAA Coral Watch Website *(see other script for extraction of the files)*. The files can be found [here](https://www.star.nesdis.noaa.gov/pub/sod/mecb/crw/data/5km/v3.1_op/nc/v1.0/monthly/).
